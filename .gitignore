@@ -1,0 +1,4 @@
+.theos/
+packages/
+rootless/
+.DS_Store

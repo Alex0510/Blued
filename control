@@ -1,0 +1,9 @@
+Package: com.fkj.bluedhook
+Name: BluedHook
+Version: 0.0.1
+Architecture: iphoneos-arm64
+Description: Blued 去广告、闪照破解、本地VIP、强制保存
+Maintainer: fkj
+Author: fkj
+Section: Tweaks
+Depends: mobilesubstrate (>= 0.9.5000)
