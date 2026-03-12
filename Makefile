@@ -15,8 +15,9 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = BluedAd
 
-BluedHook_FILES = Tweak.xm
-BluedHook_CFLAGS = -fobjc-arc
+BluedAd_FILES = Tweak.xm
+BluedAd_CFLAGS = -fobjc-arc
+BluedAd_LDFLAGS = -lz
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
