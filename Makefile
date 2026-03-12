@@ -1,8 +1,7 @@
 ARCHS = arm64 arm64e
-TARGET := iphone:clang:latest:7.0
+TARGET := iphone:clang:latest:14.0        # 目标 iOS 版本设高一些，兼容 TrollStore 所需的最低版本
 INSTALL_TARGET_PROCESSES = Blued
-THEOS_PACKAGE_SCHEME=rootless
-
+THEOS_PACKAGE_SCHEME = rootless
 
 ifeq ($(THEOS_PACKAGE_SCHEME),rootless)
 THEOS_PACKAGE_DIR = rootless
@@ -12,13 +11,9 @@ else
 THEOS_PACKAGE_DIR = rootful
 endif
 
-THEOS_DEVICE_IP = 192.168.1.110
-THEOS_DEVICE_PORT = 22
-
-
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = BluedHook
+TWEAK_NAME = BluedAd
 
 BluedHook_FILES = Tweak.xm
 BluedHook_CFLAGS = -fobjc-arc
@@ -31,13 +26,9 @@ clean::
 
 after-package::
 	@echo -e "\033[32m==>\033[0m Packaging complete."
-	@if [ "$(INSTALL)" = "1" ]; then \
-        DEB_FILE=$$(ls -t $(THEOS_PACKAGE_DIR)/*.deb | head -1); \
-        PACKAGE_NAME=$$(basename "$$DEB_FILE" | cut -d'_' -f1); \
-        echo -e "\033[34m==>\033[0m Installing $$PACKAGE_NAME to device…"; \
-        ssh root@$(THEOS_DEVICE_IP) "rm -rf /tmp/$${PACKAGE_NAME}.deb"; \
-        scp "$$DEB_FILE" root@$(THEOS_DEVICE_IP):/tmp/$${PACKAGE_NAME}.deb; \
-        ssh root@$(THEOS_DEVICE_IP) "dpkg -i --force-overwrite /tmp/$${PACKAGE_NAME}.deb && rm -f /tmp/$${PACKAGE_NAME}.deb"; \
-	else \
-        echo -e "\033[33m==>\033[0m Skipping installation (INSTALL!=1)"; \
-	fi
+	@echo -e "\033[34m==>\033[0m The .deb file is located at: $(THEOS_PACKAGE_DIR)/*.deb"
+	@echo -e "\033[33m==>\033[0m For TrollStore installation, extract the .deb and copy the files manually:"
+	@echo "  1. Unzip the .deb (ar -x *.deb; tar -xf data.tar.*)"
+	@echo "  2. Copy BluedHook.dylib and BluedHook.plist to /var/jb/Library/MobileSubstrate/DynamicLibraries/"
+	@echo "  3. Set permissions: chmod 644 *.dylib *.plist"
+	@echo "  4. Restart the Blued app (force close and reopen)"
