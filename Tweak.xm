@@ -83,7 +83,7 @@ static id (*orig_dataTaskWithRequest_completion)(id, SEL, NSURLRequest *, id);
 id hooked_dataTaskWithRequest_completion(id self, SEL _cmd, NSURLRequest *request, id completionHandler) {
     NSString *urlString = request.URL.absoluteString;
     // 检查 URL 是否匹配
-    if ([urlString containsString:@"/users?"] && [urlString containsString:@"column=3"]) {
+    if ([urlString containsString:@"/users?"] && [urlString containsString:@"aaid="]) {
         NSLog(@"[AdBlocker] Intercepting request: %@", urlString);
         
         // 包装原始的 completionHandler
