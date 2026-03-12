@@ -2,10 +2,37 @@
 #import <zlib.h>
 #import <objc/runtime.h>
 
-// 保存原始方法实现
-static id (*orig_dataTaskWithRequest_completion)(id, SEL, NSURLRequest *, id);
+// gzip 解压函数（实现放在前面，避免使用前未声明）
+NSData *gzipInflate(NSData *data) {
+    if (data.length == 0) return nil;
+    z_stream stream;
+    stream.zalloc = Z_NULL;
+    stream.zfree = Z_NULL;
+    stream.opaque = Z_NULL;
+    stream.avail_in = (uInt)data.length;
+    stream.next_in = (Bytef *)data.bytes;
+    
+    if (inflateInit2(&stream, 16 + MAX_WBITS) != Z_OK) return nil;
+    
+    NSMutableData *result = [NSMutableData dataWithCapacity:data.length * 2];
+    do {
+        stream.avail_out = (uInt)data.length;
+        stream.next_out = (Bytef *)malloc(data.length);
+        int ret = inflate(&stream, Z_NO_FLUSH);
+        if (ret != Z_OK && ret != Z_STREAM_END) {
+            free(stream.next_out);
+            inflateEnd(&stream);
+            return nil;
+        }
+        [result appendBytes:stream.next_out length:stream.total_out - result.length];
+        free(stream.next_out);
+    } while (stream.avail_out == 0);
+    
+    inflateEnd(&stream);
+    return result;
+}
 
-// 数据处理函数（与之前相同）
+// 数据处理函数
 NSData *processResponseData(NSData *data, NSURLResponse *response) {
     // 处理 gzip 解压
     NSData *uncompressedData = data;
@@ -13,7 +40,6 @@ NSData *processResponseData(NSData *data, NSURLResponse *response) {
         const uint8_t *bytes = (const uint8_t *)data.bytes;
         if (bytes[0] == 0x1F && bytes[1] == 0x8B) {
             NSLog(@"[AdBlocker] Data is gzip compressed, decompressing...");
-            // 解压函数（见下方）
             uncompressedData = gzipInflate(data);
             if (!uncompressedData) {
                 NSLog(@"[AdBlocker] Decompression failed, using original.");
@@ -50,35 +76,8 @@ NSData *processResponseData(NSData *data, NSURLResponse *response) {
     return uncompressedData;
 }
 
-// gzip 解压函数（与之前相同，改为 C 函数）
-NSData *gzipInflate(NSData *data) {
-    if (data.length == 0) return nil;
-    z_stream stream;
-    stream.zalloc = Z_NULL;
-    stream.zfree = Z_NULL;
-    stream.opaque = Z_NULL;
-    stream.avail_in = (uInt)data.length;
-    stream.next_in = (Bytef *)data.bytes;
-    
-    if (inflateInit2(&stream, 16 + MAX_WBITS) != Z_OK) return nil;
-    
-    NSMutableData *result = [NSMutableData dataWithCapacity:data.length * 2];
-    do {
-        stream.avail_out = (uInt)data.length;
-        stream.next_out = (Bytef *)malloc(data.length);
-        int ret = inflate(&stream, Z_NO_FLUSH);
-        if (ret != Z_OK && ret != Z_STREAM_END) {
-            free(stream.next_out);
-            inflateEnd(&stream);
-            return nil;
-        }
-        [result appendBytes:stream.next_out length:stream.total_out - result.length];
-        free(stream.next_out);
-    } while (stream.avail_out == 0);
-    
-    inflateEnd(&stream);
-    return result;
-}
+// 保存原始方法实现
+static id (*orig_dataTaskWithRequest_completion)(id, SEL, NSURLRequest *, id);
 
 // Hook 函数
 id hooked_dataTaskWithRequest_completion(id self, SEL _cmd, NSURLRequest *request, id completionHandler) {
@@ -134,7 +133,8 @@ id hooked_dataTaskWithRequest_completion(id self, SEL _cmd, NSURLRequest *reques
             NSLog(@"[AdBlocker] Failed to get method");
             return;
         }
-        orig_dataTaskWithRequest_completion = (void *)method_getImplementation(m);
+        // 显式转换函数指针类型
+        orig_dataTaskWithRequest_completion = (id (*)(id, SEL, NSURLRequest *, id))method_getImplementation(m);
         method_setImplementation(m, (IMP)hooked_dataTaskWithRequest_completion);
         NSLog(@"[AdBlocker] Hook installed successfully");
     }
