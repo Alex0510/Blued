@@ -1,20 +1,20 @@
-// Tweak.x
 #import <Foundation/Foundation.h>
 
+// 自定义 URL 协议
 @interface AdBlockerURLProtocol : NSURLProtocol
 @end
 
 @implementation AdBlockerURLProtocol
 
-// 判断是否拦截该请求
+// 判断是否拦截请求
 + (BOOL)canInitWithRequest:(NSURLRequest *)request {
-    // 防止重复处理
-    if ([self propertyForKey:@"AdBlockerHandled" inRequest:request] != nil) {
+    // 避免重复处理
+    if ([self propertyForKey:@"AdBlockerHandled" inRequest:request]) {
         return NO;
     }
     
     NSString *urlString = request.URL.absoluteString;
-    // 正则：https://.*/users?column=3&extra_info=.*
+    // 正则匹配：https://.*/users?column=3&extra_info=.*
     NSString *pattern = @"^https://.*/users\\?column=3&extra_info=.*";
     NSError *error = nil;
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern
@@ -34,10 +34,8 @@
 
 - (void)startLoading {
     NSMutableURLRequest *newRequest = [self.request mutableCopy];
-    // 标记已处理，避免循环
     [AdBlockerURLProtocol setProperty:@YES forKey:@"AdBlockerHandled" inRequest:newRequest];
     
-    // 使用 NSURLSession 发起实际请求
     NSURLSession *session = [NSURLSession sharedSession];
     NSURLSessionDataTask *task = [session dataTaskWithRequest:newRequest
                                             completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
@@ -53,7 +51,7 @@
             NSMutableDictionary *modifiedJson = [jsonObj mutableCopy];
             NSMutableDictionary *extra = [modifiedJson[@"extra"] mutableCopy];
             if (extra) {
-                // 移除目标字段
+                // 移除指定字段
                 [extra removeObjectForKey:@"adms_operating"];
                 [extra removeObjectForKey:@"nearby_dating"];
                 [extra removeObjectForKey:@"adms_user"];
@@ -79,7 +77,6 @@
                                                                      HTTPVersion:nil
                                                                     headerFields:headers];
         
-        // 将修改后的响应传递给客户端
         [self.client URLProtocol:self didReceiveResponse:newResponse cacheStoragePolicy:NSURLCacheStorageNotAllowed];
         [self.client URLProtocol:self didLoadData:data];
         [self.client URLProtocolDidFinishLoading:self];
@@ -89,12 +86,12 @@
 }
 
 - (void)stopLoading {
-    // 如果需要，可以取消任务
+    // 可选：取消任务
 }
 
 @end
 
-// 构造函数：在插件加载时注册自定义协议
+// 插件加载时注册协议
 %ctor {
     [NSURLProtocol registerClass:[AdBlockerURLProtocol class]];
 }
