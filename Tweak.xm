@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <zlib.h>  // 必须导入以使用 gzip 解压
 
 @interface AdBlockerURLProtocol : NSURLProtocol
 @end
@@ -13,7 +14,7 @@
     }
     
     NSString *urlString = request.URL.absoluteString;
-    // 更宽松的正则：匹配任何包含 /users? 且带有 column=3 的请求
+    // 正则：匹配任何包含 /users? 且带有 column=3 的请求
     NSString *pattern = @"^https?://[^/]+/users\\?.*column=3.*";
     NSError *error = nil;
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern
@@ -51,15 +52,13 @@
             return;
         }
         
-        // 尝试处理可能的 gzip 压缩（NSURLSession 通常自动解压，但某些情况可能未解压）
+        // 处理可能的 gzip 压缩
         NSData *uncompressedData = data;
-        // 检查是否为 gzip 格式（前两个字节为 0x1F 0x8B）
         if (data.length >= 2) {
-            const uint8_t *bytes = data.bytes;
+            const uint8_t *bytes = (const uint8_t *)data.bytes;  // 显式转换
             if (bytes[0] == 0x1F && bytes[1] == 0x8B) {
                 NSLog(@"[AdBlocker] Data is gzip compressed, attempting decompression...");
-                // 使用 zlib 解压（需链接 libz）
-                uncompressedData = [self gzipInflate:data];
+                uncompressedData = [AdBlockerURLProtocol gzipInflate:data];  // 使用类方法
                 if (!uncompressedData) {
                     NSLog(@"[AdBlocker] Gzip decompression failed, using original data.");
                     uncompressedData = data;
@@ -94,7 +93,6 @@
                 
                 if (modified) {
                     modifiedJson[@"extra"] = extra;
-                    // 重新序列化
                     NSData *newData = [NSJSONSerialization dataWithJSONObject:modifiedJson
                                                                        options:0
                                                                          error:&jsonError];
@@ -131,7 +129,7 @@
     // 可选：取消任务
 }
 
-// gzip 解压辅助方法（需链接 libz）
+// gzip 解压类方法
 + (NSData *)gzipInflate:(NSData *)data {
     if (data.length == 0) return nil;
     
@@ -142,7 +140,10 @@
     stream.avail_in = (uInt)data.length;
     stream.next_in = (Bytef *)data.bytes;
     
-    if (inflateInit2(&stream, 16+MAX_WBITS) != Z_OK) return nil; // 16+ 表示 gzip
+    // 初始化 inflate 以处理 gzip (16 + MAX_WBITS)
+    if (inflateInit2(&stream, 16 + MAX_WBITS) != Z_OK) {
+        return nil;
+    }
     
     NSMutableData *result = [NSMutableData dataWithCapacity:data.length * 2];
     do {
