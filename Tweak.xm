@@ -5,7 +5,6 @@
 
 - (void)awakeFromNib {
     %orig;
-    // 隐藏所有占位视图
     NSArray *viewNames = @[
         @"privilegeView",
         @"shadowView",
@@ -19,13 +18,12 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        view.hidden = YES;
+        [view removeFromSuperview];
     }
 }
 
 - (void)layoutSubviews {
     %orig;
-    // 再次确保隐藏（防止被重新显示）
     NSArray *viewNames = @[
         @"privilegeView",
         @"shadowView",
@@ -39,7 +37,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        view.hidden = YES;
+        [view removeFromSuperview];
     }
 }
 
@@ -59,7 +57,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        view.hidden = YES;
+        [view removeFromSuperview];
     }
 }
 
@@ -75,7 +73,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        view.hidden = YES;
+        [view removeFromSuperview];
     }
 }
 
@@ -93,7 +91,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        view.hidden = YES;
+        [view removeFromSuperview];
     }
 }
 
@@ -107,7 +105,24 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        view.hidden = YES;
+        [view removeFromSuperview];
+    }
+}
+
+- (void)didMoveToWindow {
+    %orig;
+    // 当视图被加入窗口时，再次检查并移除（防止被重新添加）
+    NSArray *viewNames = @[
+        @"rainBowView",
+        @"helpView",
+        @"emojiView",
+        @"bannerView"
+    ];
+    for (NSString *name in viewNames) {
+        UIView *view = [(id)self valueForKey:name];
+        if (view.superview) {
+            [view removeFromSuperview];
+        }
     }
 }
 
@@ -124,7 +139,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        view.hidden = YES;
+        [view removeFromSuperview];
     }
 }
 
@@ -137,7 +152,22 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        view.hidden = YES;
+        [view removeFromSuperview];
+    }
+}
+
+- (void)didMoveToWindow {
+    %orig;
+    NSArray *viewNames = @[
+        @"anchorLevelView",
+        @"fansClubView",
+        @"richLevelView"
+    ];
+    for (NSString *name in viewNames) {
+        UIView *view = [(id)self valueForKey:name];
+        if (view.superview) {
+            [view removeFromSuperview];
+        }
     }
 }
 
@@ -154,7 +184,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        view.hidden = YES;
+        [view removeFromSuperview];
     }
 }
 
@@ -167,7 +197,22 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        view.hidden = YES;
+        [view removeFromSuperview];
+    }
+}
+
+- (void)didMoveToWindow {
+    %orig;
+    NSArray *viewNames = @[
+        @"anchorLevelView",
+        @"fansClubView",
+        @"richLevelView"
+    ];
+    for (NSString *name in viewNames) {
+        UIView *view = [(id)self valueForKey:name];
+        if (view.superview) {
+            [view removeFromSuperview];
+        }
     }
 }
 
