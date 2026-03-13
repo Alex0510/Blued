@@ -17,56 +17,67 @@ static inline void BDSetZeroFrame(UIView *view) {
 static void BDHideSubviewsRecursively(UIView *view) {
     if (!view) return;
 
-    view.hidden = YES;
-    view.alpha = 0.0;
-    view.clipsToBounds = YES;
-    view.userInteractionEnabled = NO;
-    BDSetZeroFrame(view);
+    @try {
+        view.hidden = YES;
+        view.alpha = 0.0;
+        view.clipsToBounds = YES;
+        view.userInteractionEnabled = NO;
+        BDSetZeroFrame(view);
 
-    for (NSLayoutConstraint *c in view.constraints) {
-        NSLayoutAttribute a = c.firstAttribute;
-        if (a == NSLayoutAttributeWidth ||
-            a == NSLayoutAttributeHeight ||
-            a == NSLayoutAttributeTop ||
-            a == NSLayoutAttributeBottom ||
-            a == NSLayoutAttributeLeading ||
-            a == NSLayoutAttributeTrailing) {
-            c.constant = 0;
+        // 安全地修改约束
+        @try {
+            for (NSLayoutConstraint *c in view.constraints) {
+                NSLayoutAttribute a = c.firstAttribute;
+                if (a == NSLayoutAttributeWidth ||
+                    a == NSLayoutAttributeHeight ||
+                    a == NSLayoutAttributeTop ||
+                    a == NSLayoutAttributeBottom ||
+                    a == NSLayoutAttributeLeading ||
+                    a == NSLayoutAttributeTrailing) {
+                    c.constant = 0;
+                }
+            }
+        } @catch (NSException *e) {
+            NSLog(@"[BluedAd] Exception modifying constraints: %@", e);
         }
-    }
 
-    for (UIView *sub in view.subviews) {
-        BDHideSubviewsRecursively(sub);
+        for (UIView *sub in view.subviews) {
+            BDHideSubviewsRecursively(sub);
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[BluedAd] Exception in BDHideSubviewsRecursively: %@", e);
     }
-
-    // 移除强制布局调用，避免递归触发 layoutSubviews hook
 }
 
 static void BDCollapseCell(id selfObj) {
     if (!selfObj || ![selfObj isKindOfClass:[UICollectionViewCell class]]) return;
 
-    UICollectionViewCell *cell = (UICollectionViewCell *)selfObj;
-    cell.hidden = YES;
-    cell.alpha = 0.0;
-    cell.clipsToBounds = YES;
-    cell.userInteractionEnabled = NO;
-    BDSetZeroFrame(cell);
-
-    if (cell.contentView) {
-        BDHideSubviewsRecursively(cell.contentView);
-        cell.contentView.hidden = YES;
-        cell.contentView.alpha = 0.0;
-        BDSetZeroFrame(cell.contentView);
-    }
-
-    for (NSLayoutConstraint *c in cell.constraints) {
-        NSLayoutAttribute a = c.firstAttribute;
-        if (a == NSLayoutAttributeWidth || a == NSLayoutAttributeHeight) {
-            c.constant = 0;
-        }
-    }
-
     @try {
+        UICollectionViewCell *cell = (UICollectionViewCell *)selfObj;
+        cell.hidden = YES;
+        cell.alpha = 0.0;
+        cell.clipsToBounds = YES;
+        cell.userInteractionEnabled = NO;
+        BDSetZeroFrame(cell);
+
+        if (cell.contentView) {
+            BDHideSubviewsRecursively(cell.contentView);
+            cell.contentView.hidden = YES;
+            cell.contentView.alpha = 0.0;
+            BDSetZeroFrame(cell.contentView);
+        }
+
+        @try {
+            for (NSLayoutConstraint *c in cell.constraints) {
+                NSLayoutAttribute a = c.firstAttribute;
+                if (a == NSLayoutAttributeWidth || a == NSLayoutAttributeHeight) {
+                    c.constant = 0;
+                }
+            }
+        } @catch (NSException *e) {
+            NSLog(@"[BluedAd] Exception modifying cell constraints: %@", e);
+        }
+
         NSArray *keys = @[
             @"centerView",
             @"mainStackView",
@@ -87,14 +98,24 @@ static void BDCollapseCell(id selfObj) {
         ];
 
         for (NSString *key in keys) {
-            id obj = [cell valueForKey:key];
-            if ([obj isKindOfClass:[UIView class]]) {
-                BDHideSubviewsRecursively((UIView *)obj);
+            @try {
+                // 检查 getter 是否存在，避免 valueForKey: 抛出异常
+                SEL getter = NSSelectorFromString(key);
+                if ([cell respondsToSelector:getter]) {
+                    id obj = [cell valueForKey:key];
+                    if ([obj isKindOfClass:[UIView class]]) {
+                        BDHideSubviewsRecursively((UIView *)obj);
+                    }
+                } else {
+                    NSLog(@"[BluedAd] Warning: cell %@ does not respond to selector %@", NSStringFromClass([cell class]), key);
+                }
+            } @catch (NSException *e) {
+                NSLog(@"[BluedAd] Exception accessing key %@: %@", key, e);
             }
         }
-    } @catch (__unused NSException *e) {}
-
-    // 移除强制布局调用，避免递归
+    } @catch (NSException *e) {
+        NSLog(@"[BluedAd] Exception in BDCollapseCell: %@", e);
+    }
 }
 
 #pragma mark - Hook impls
