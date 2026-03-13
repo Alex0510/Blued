@@ -5,25 +5,20 @@
 
 - (void)awakeFromNib {
     %orig;
-    NSArray *viewNames = @[
-        @"privilegeView",
-        @"shadowView",
-        @"shadowView2",
-        @"groupChatView",
-        @"homePretectView",
-        @"privilegeAnimationView",
-        @"shadowAnimationView",
-        @"groupChatAnimationView",
-        @"homeAnimationView"
-    ];
-    for (NSString *name in viewNames) {
-        UIView *view = [(id)self valueForKey:name];
-        if (view) view.hidden = YES;
-    }
+    [self hidePlaceholderViews];
 }
 
 - (void)layoutSubviews {
     %orig;
+    [self hidePlaceholderViews];
+}
+
+- (void)prepareForReuse {
+    %orig;
+    [self hidePlaceholderViews];
+}
+
+- (void)hidePlaceholderViews {
     NSArray *viewNames = @[
         @"privilegeView",
         @"shadowView",
@@ -37,7 +32,13 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        if (view) view.hidden = YES;
+        if (view) {
+            view.hidden = YES;
+            // 延迟执行确保不被其他代码覆盖
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                view.hidden = YES;
+            });
+        }
     }
 }
 
@@ -47,22 +48,20 @@
 
 - (void)awakeFromNib {
     %orig;
-    NSArray *viewNames = @[
-        @"publicBenefitView",
-        @"hullHealthView",
-        @"healthStoreView",
-        @"productToPromotionView",
-        @"publicBenefitView2",
-        @"hullHealthView2"
-    ];
-    for (NSString *name in viewNames) {
-        UIView *view = [(id)self valueForKey:name];
-        if (view) view.hidden = YES;
-    }
+    [self hidePlaceholderViews];
 }
 
 - (void)layoutSubviews {
     %orig;
+    [self hidePlaceholderViews];
+}
+
+- (void)prepareForReuse {
+    %orig;
+    [self hidePlaceholderViews];
+}
+
+- (void)hidePlaceholderViews {
     NSArray *viewNames = @[
         @"publicBenefitView",
         @"hullHealthView",
@@ -73,7 +72,12 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        if (view) view.hidden = YES;
+        if (view) {
+            view.hidden = YES;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                view.hidden = YES;
+            });
+        }
     }
 }
 
@@ -83,20 +87,20 @@
 
 - (void)awakeFromNib {
     %orig;
-    NSArray *viewNames = @[
-        @"rainBowView",
-        @"helpView",
-        @"emojiView",
-        @"bannerView"
-    ];
-    for (NSString *name in viewNames) {
-        UIView *view = [(id)self valueForKey:name];
-        if (view) view.hidden = YES;
-    }
+    [self hidePlaceholderViews];
 }
 
 - (void)layoutSubviews {
     %orig;
+    [self hidePlaceholderViews];
+}
+
+- (void)prepareForReuse {
+    %orig;
+    [self hidePlaceholderViews];
+}
+
+- (void)hidePlaceholderViews {
     NSArray *viewNames = @[
         @"rainBowView",
         @"helpView",
@@ -105,7 +109,12 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        if (view) view.hidden = YES;
+        if (view) {
+            view.hidden = YES;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                view.hidden = YES;
+            });
+        }
     }
 }
 
@@ -115,19 +124,20 @@
 
 - (void)awakeFromNib {
     %orig;
-    NSArray *viewNames = @[
-        @"anchorLevelView",
-        @"fansClubView",
-        @"richLevelView"
-    ];
-    for (NSString *name in viewNames) {
-        UIView *view = [(id)self valueForKey:name];
-        if (view) view.hidden = YES;
-    }
+    [self hidePlaceholderViews];
 }
 
 - (void)layoutSubviews {
     %orig;
+    [self hidePlaceholderViews];
+}
+
+- (void)prepareForReuse {
+    %orig;
+    [self hidePlaceholderViews];
+}
+
+- (void)hidePlaceholderViews {
     NSArray *viewNames = @[
         @"anchorLevelView",
         @"fansClubView",
@@ -135,7 +145,12 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        if (view) view.hidden = YES;
+        if (view) {
+            view.hidden = YES;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                view.hidden = YES;
+            });
+        }
     }
 }
 
@@ -145,19 +160,20 @@
 
 - (void)awakeFromNib {
     %orig;
-    NSArray *viewNames = @[
-        @"anchorLevelView",
-        @"fansClubView",
-        @"richLevelView"
-    ];
-    for (NSString *name in viewNames) {
-        UIView *view = [(id)self valueForKey:name];
-        if (view) view.hidden = YES;
-    }
+    [self hidePlaceholderViews];
 }
 
 - (void)layoutSubviews {
     %orig;
+    [self hidePlaceholderViews];
+}
+
+- (void)prepareForReuse {
+    %orig;
+    [self hidePlaceholderViews];
+}
+
+- (void)hidePlaceholderViews {
     NSArray *viewNames = @[
         @"anchorLevelView",
         @"fansClubView",
@@ -165,7 +181,12 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        if (view) view.hidden = YES;
+        if (view) {
+            view.hidden = YES;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                view.hidden = YES;
+            });
+        }
     }
 }
 
