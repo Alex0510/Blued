@@ -5,6 +5,7 @@
 
 - (void)awakeFromNib {
     %orig;
+    // 隐藏所有占位视图
     NSArray *viewNames = @[
         @"privilegeView",
         @"shadowView",
@@ -24,6 +25,7 @@
 
 - (void)layoutSubviews {
     %orig;
+    // 再次确保隐藏（防止被重新显示）
     NSArray *viewNames = @[
         @"privilegeView",
         @"shadowView",
