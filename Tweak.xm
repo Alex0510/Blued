@@ -3,29 +3,69 @@
 #import <objc/runtime.h>
 #import <substrate.h>
 
-static const void *kBDCollapsedKey = &kBDCollapsedKey;
-
 #pragma mark - Utils
 
-static inline BOOL BDAlreadyCollapsed(id obj) {
-    id v = objc_getAssociatedObject(obj, kBDCollapsedKey);
-    return [v boolValue];
+static inline void BDSetZeroFrame(UIView *view) {
+    if (!view) return;
+    CGRect f = view.frame;
+    f.size.width = 0.01;
+    f.size.height = 0.01;
+    view.frame = f;
+    view.bounds = CGRectMake(0, 0, 0.01, 0.01);
 }
 
-static inline void BDMarkCollapsed(id obj) {
-    objc_setAssociatedObject(obj, kBDCollapsedKey, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
-static void BDSafelyHideView(UIView *view) {
+static void BDHideSubviewsRecursively(UIView *view) {
     if (!view) return;
 
     view.hidden = YES;
     view.alpha = 0.0;
     view.clipsToBounds = YES;
     view.userInteractionEnabled = NO;
+    BDSetZeroFrame(view);
+
+    for (NSLayoutConstraint *c in view.constraints) {
+        NSLayoutAttribute a = c.firstAttribute;
+        if (a == NSLayoutAttributeWidth ||
+            a == NSLayoutAttributeHeight ||
+            a == NSLayoutAttributeTop ||
+            a == NSLayoutAttributeBottom ||
+            a == NSLayoutAttributeLeading ||
+            a == NSLayoutAttributeTrailing) {
+            c.constant = 0;
+        }
+    }
+
+    for (UIView *sub in view.subviews) {
+        BDHideSubviewsRecursively(sub);
+    }
+
+    // 移除强制布局调用，避免递归触发 layoutSubviews hook
 }
 
-static void BDCollapseKnownSubviews(id cell) {
+static void BDCollapseCell(id selfObj) {
+    if (!selfObj || ![selfObj isKindOfClass:[UICollectionViewCell class]]) return;
+
+    UICollectionViewCell *cell = (UICollectionViewCell *)selfObj;
+    cell.hidden = YES;
+    cell.alpha = 0.0;
+    cell.clipsToBounds = YES;
+    cell.userInteractionEnabled = NO;
+    BDSetZeroFrame(cell);
+
+    if (cell.contentView) {
+        BDHideSubviewsRecursively(cell.contentView);
+        cell.contentView.hidden = YES;
+        cell.contentView.alpha = 0.0;
+        BDSetZeroFrame(cell.contentView);
+    }
+
+    for (NSLayoutConstraint *c in cell.constraints) {
+        NSLayoutAttribute a = c.firstAttribute;
+        if (a == NSLayoutAttributeWidth || a == NSLayoutAttributeHeight) {
+            c.constant = 0;
+        }
+    }
+
     @try {
         NSArray *keys = @[
             @"centerView",
@@ -49,48 +89,26 @@ static void BDCollapseKnownSubviews(id cell) {
         for (NSString *key in keys) {
             id obj = [cell valueForKey:key];
             if ([obj isKindOfClass:[UIView class]]) {
-                BDSafelyHideView((UIView *)obj);
+                BDHideSubviewsRecursively((UIView *)obj);
             }
         }
     } @catch (__unused NSException *e) {}
+
+    // 移除强制布局调用，避免递归
 }
 
-static void BDCollapseCellLight(id selfObj) {
-    if (!selfObj || ![selfObj isKindOfClass:[UICollectionViewCell class]]) return;
-
-    UICollectionViewCell *cell = (UICollectionViewCell *)selfObj;
-
-    if (BDAlreadyCollapsed(cell)) return;
-    BDMarkCollapsed(cell);
-
-    BDSafelyHideView(cell);
-    if (cell.contentView) {
-        BDSafelyHideView(cell.contentView);
-    }
-
-    BDCollapseKnownSubviews(cell);
-}
-
-#pragma mark - Hooked methods
+#pragma mark - Hook impls
 
 static void (*orig_awakeFromNib)(id, SEL) = NULL;
 static void replaced_awakeFromNib(id self, SEL _cmd) {
     if (orig_awakeFromNib) orig_awakeFromNib(self, _cmd);
-    BDCollapseCellLight(self);
+    BDCollapseCell(self);
 }
 
 static void (*orig_prepareForReuse)(id, SEL) = NULL;
 static void replaced_prepareForReuse(id self, SEL _cmd) {
     if (orig_prepareForReuse) orig_prepareForReuse(self, _cmd);
-
-    objc_setAssociatedObject(self, kBDCollapsedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    BDCollapseCellLight(self);
-}
-
-static void (*orig_didMoveToSuperview)(id, SEL) = NULL;
-static void replaced_didMoveToSuperview(id self, SEL _cmd) {
-    if (orig_didMoveToSuperview) orig_didMoveToSuperview(self, _cmd);
-    BDCollapseCellLight(self);
+    BDCollapseCell(self);
 }
 
 static CGSize (*orig_sizeThatFits)(id, SEL, CGSize) = NULL;
@@ -120,29 +138,31 @@ static UICollectionViewLayoutAttributes *replaced_preferredLayoutAttributesFitti
 
 #pragma mark - Runtime Hook
 
-static void BDHookIfExists(Class cls, SEL sel, IMP newImp, IMP *oldImp) {
+static void BDHookSelectorIfExists(Class cls, SEL sel, IMP newImp, IMP *oldImp, const char *types) {
     if (!cls || !sel || !newImp) return;
+
     Method m = class_getInstanceMethod(cls, sel);
     if (m) {
         MSHookMessageEx(cls, sel, newImp, oldImp);
+    } else if (types) {
+        class_addMethod(cls, sel, newImp, types);
     }
 }
 
-static void BDHookCellClass(NSString *name) {
-    Class cls = objc_getClass(name.UTF8String);
+static void BDHookTargetClass(NSString *className) {
+    Class cls = objc_getClass(className.UTF8String);
     if (!cls) {
-        NSLog(@"[BluedAd] class not found: %@", name);
+        NSLog(@"[BluedAd] class not found: %@", className);
         return;
     }
 
-    NSLog(@"[BluedAd] hook class: %@", name);
+    NSLog(@"[BluedAd] hooking class: %@", className);
 
-    BDHookIfExists(cls, @selector(awakeFromNib), (IMP)replaced_awakeFromNib, (IMP *)&orig_awakeFromNib);
-    BDHookIfExists(cls, @selector(prepareForReuse), (IMP)replaced_prepareForReuse, (IMP *)&orig_prepareForReuse);
-    BDHookIfExists(cls, @selector(didMoveToSuperview), (IMP)replaced_didMoveToSuperview, (IMP *)&orig_didMoveToSuperview);
-    BDHookIfExists(cls, @selector(sizeThatFits:), (IMP)replaced_sizeThatFits, (IMP *)&orig_sizeThatFits);
-    BDHookIfExists(cls, @selector(systemLayoutSizeFittingSize:), (IMP)replaced_systemLayoutSizeFittingSize, (IMP *)&orig_systemLayoutSizeFittingSize);
-    BDHookIfExists(cls, @selector(preferredLayoutAttributesFittingAttributes:), (IMP)replaced_preferredLayoutAttributesFittingAttributes, (IMP *)&orig_preferredLayoutAttributesFittingAttributes);
+    BDHookSelectorIfExists(cls, @selector(awakeFromNib), (IMP)replaced_awakeFromNib, (IMP *)&orig_awakeFromNib, "v@:");
+    BDHookSelectorIfExists(cls, @selector(prepareForReuse), (IMP)replaced_prepareForReuse, (IMP *)&orig_prepareForReuse, "v@:");
+    BDHookSelectorIfExists(cls, @selector(sizeThatFits:), (IMP)replaced_sizeThatFits, (IMP *)&orig_sizeThatFits, "{CGSize=dd}@:{CGSize=dd}");
+    BDHookSelectorIfExists(cls, @selector(systemLayoutSizeFittingSize:), (IMP)replaced_systemLayoutSizeFittingSize, (IMP *)&orig_systemLayoutSizeFittingSize, "{CGSize=dd}@:{CGSize=dd}");
+    BDHookSelectorIfExists(cls, @selector(preferredLayoutAttributesFittingAttributes:), (IMP)replaced_preferredLayoutAttributesFittingAttributes, (IMP *)&orig_preferredLayoutAttributesFittingAttributes, "@@:@");
 }
 
 __attribute__((constructor))
@@ -156,7 +176,7 @@ static void BDInit() {
         ];
 
         for (NSString *name in targets) {
-            BDHookCellClass(name);
+            BDHookTargetClass(name);
         }
     }
 }
