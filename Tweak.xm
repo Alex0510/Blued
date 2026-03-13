@@ -5,7 +5,6 @@
 
 - (void)awakeFromNib {
     %orig;
-    // 隐藏所有占位视图
     NSArray *viewNames = @[
         @"privilegeView",
         @"shadowView",
@@ -25,7 +24,6 @@
 
 - (void)layoutSubviews {
     %orig;
-    // 再次确保隐藏（防止被重新显示）
     NSArray *viewNames = @[
         @"privilegeView",
         @"shadowView",
@@ -72,6 +70,98 @@
         @"productToPromotionView",
         @"publicBenefitView2",
         @"hullHealthView2"
+    ];
+    for (NSString *name in viewNames) {
+        UIView *view = [(id)self valueForKey:name];
+        view.hidden = YES;
+    }
+}
+
+%end
+
+%hook BDOtherServiceCollectionCell
+
+- (void)awakeFromNib {
+    %orig;
+    NSArray *viewNames = @[
+        @"rainBowView",
+        @"helpView",
+        @"emojiView",
+        @"bannerView"
+    ];
+    for (NSString *name in viewNames) {
+        UIView *view = [(id)self valueForKey:name];
+        view.hidden = YES;
+    }
+}
+
+- (void)layoutSubviews {
+    %orig;
+    NSArray *viewNames = @[
+        @"rainBowView",
+        @"helpView",
+        @"emojiView",
+        @"bannerView"
+    ];
+    for (NSString *name in viewNames) {
+        UIView *view = [(id)self valueForKey:name];
+        view.hidden = YES;
+    }
+}
+
+%end
+
+%hook BDLiveServiceCollectionCell
+
+- (void)awakeFromNib {
+    %orig;
+    NSArray *viewNames = @[
+        @"anchorLevelView",
+        @"fansClubView",
+        @"richLevelView"
+    ];
+    for (NSString *name in viewNames) {
+        UIView *view = [(id)self valueForKey:name];
+        view.hidden = YES;
+    }
+}
+
+- (void)layoutSubviews {
+    %orig;
+    NSArray *viewNames = @[
+        @"anchorLevelView",
+        @"fansClubView",
+        @"richLevelView"
+    ];
+    for (NSString *name in viewNames) {
+        UIView *view = [(id)self valueForKey:name];
+        view.hidden = YES;
+    }
+}
+
+%end
+
+%hook BDAudioServiceCollectionViewCell
+
+- (void)awakeFromNib {
+    %orig;
+    NSArray *viewNames = @[
+        @"anchorLevelView",
+        @"fansClubView",
+        @"richLevelView"
+    ];
+    for (NSString *name in viewNames) {
+        UIView *view = [(id)self valueForKey:name];
+        view.hidden = YES;
+    }
+}
+
+- (void)layoutSubviews {
+    %orig;
+    NSArray *viewNames = @[
+        @"anchorLevelView",
+        @"fansClubView",
+        @"richLevelView"
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
