@@ -18,7 +18,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        [view removeFromSuperview];
+        if (view) view.hidden = YES;
     }
 }
 
@@ -37,7 +37,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        [view removeFromSuperview];
+        if (view) view.hidden = YES;
     }
 }
 
@@ -57,7 +57,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        [view removeFromSuperview];
+        if (view) view.hidden = YES;
     }
 }
 
@@ -73,7 +73,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        [view removeFromSuperview];
+        if (view) view.hidden = YES;
     }
 }
 
@@ -91,7 +91,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        [view removeFromSuperview];
+        if (view) view.hidden = YES;
     }
 }
 
@@ -105,24 +105,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        [view removeFromSuperview];
-    }
-}
-
-- (void)didMoveToWindow {
-    %orig;
-    // 当视图被加入窗口时，再次检查并移除（防止被重新添加）
-    NSArray *viewNames = @[
-        @"rainBowView",
-        @"helpView",
-        @"emojiView",
-        @"bannerView"
-    ];
-    for (NSString *name in viewNames) {
-        UIView *view = [(id)self valueForKey:name];
-        if (view.superview) {
-            [view removeFromSuperview];
-        }
+        if (view) view.hidden = YES;
     }
 }
 
@@ -139,7 +122,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        [view removeFromSuperview];
+        if (view) view.hidden = YES;
     }
 }
 
@@ -152,22 +135,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        [view removeFromSuperview];
-    }
-}
-
-- (void)didMoveToWindow {
-    %orig;
-    NSArray *viewNames = @[
-        @"anchorLevelView",
-        @"fansClubView",
-        @"richLevelView"
-    ];
-    for (NSString *name in viewNames) {
-        UIView *view = [(id)self valueForKey:name];
-        if (view.superview) {
-            [view removeFromSuperview];
-        }
+        if (view) view.hidden = YES;
     }
 }
 
@@ -184,7 +152,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        [view removeFromSuperview];
+        if (view) view.hidden = YES;
     }
 }
 
@@ -197,22 +165,7 @@
     ];
     for (NSString *name in viewNames) {
         UIView *view = [(id)self valueForKey:name];
-        [view removeFromSuperview];
-    }
-}
-
-- (void)didMoveToWindow {
-    %orig;
-    NSArray *viewNames = @[
-        @"anchorLevelView",
-        @"fansClubView",
-        @"richLevelView"
-    ];
-    for (NSString *name in viewNames) {
-        UIView *view = [(id)self valueForKey:name];
-        if (view.superview) {
-            [view removeFromSuperview];
-        }
+        if (view) view.hidden = YES;
     }
 }
 
