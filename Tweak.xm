@@ -1,8 +1,8 @@
 /* Tweak.xm - 移除 BDHealthServiceCollectionCell 中的占位插图 */
 #import <UIKit/UIKit.h>
 
-// 完整的类接口声明（从提供的头文件复制并补全类型为 id）
-@interface BDHealthServiceCollectionCell : UIView // 假设继承自 UIView（实际可能是 UITableViewCell 等，但不影响）
+// 完整的类接口声明（从提供的头文件复制并补全类型为 id，已移除 .cxx_destruct）
+@interface BDHealthServiceCollectionCell : UIView
 // 属性
 @property id centerView;
 @property id titleLabel;
@@ -54,7 +54,7 @@
 @property BOOL isTouristsMode;
 @property id signal;
 
-// 方法
+// 方法（保留原始方法声明，但实际不需要全部列出，编译器只需要知道类存在即可）
 - (void)awakeFromNib;
 - (void)setSignal:(id)arg;
 - (void)layoutSubviews;
@@ -168,7 +168,7 @@
 - (void)setRedPointView2:(id)view;
 - (void)setRedPointView3:(id)view;
 - (void)setBannerSortDictM:(id)dict;
-- (void).cxx_destruct;
+// 移除了 - (void).cxx_destruct;
 @end
 
 // 开始 Hook
@@ -180,7 +180,8 @@
     [self removePlaceholderImageViews];
 }
 
-// 新增方法：移除指定的占位视图
+// 使用 %new 添加新方法：移除指定的占位视图
+%new
 - (void)removePlaceholderImageViews {
     NSArray<NSString *> *viewProps = @[
         @"firstCollectionImgView",
@@ -206,7 +207,8 @@
     }
 }
 
-// 备选：递归移除所有 UIImageView（如需要更彻底可调用）
+// 使用 %new 添加新方法：递归移除所有 UIImageView
+%new
 - (void)removeAllImageViewsInView:(UIView *)view {
     for (UIView *subview in view.subviews) {
         if ([subview isKindOfClass:[UIImageView class]]) {
