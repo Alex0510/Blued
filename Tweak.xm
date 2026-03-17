@@ -1,7 +1,7 @@
 /* Tweak.xm - 移除 BDHealthServiceCollectionCell 中的占位插图 */
 #import <UIKit/UIKit.h>
 
-// 完整的类接口声明（从提供的头文件复制并补全类型为 id，已移除 .cxx_destruct）
+// 完整的类接口声明（已移除 .cxx_destruct）
 @interface BDHealthServiceCollectionCell : UIView
 // 属性
 @property id centerView;
@@ -54,7 +54,7 @@
 @property BOOL isTouristsMode;
 @property id signal;
 
-// 方法（保留原始方法声明，但实际不需要全部列出，编译器只需要知道类存在即可）
+// 原始方法（可选，仅为了完整性）
 - (void)awakeFromNib;
 - (void)setSignal:(id)arg;
 - (void)layoutSubviews;
@@ -168,7 +168,12 @@
 - (void)setRedPointView2:(id)view;
 - (void)setRedPointView3:(id)view;
 - (void)setBannerSortDictM:(id)dict;
-// 移除了 - (void).cxx_destruct;
+@end
+
+// 添加类别声明新方法，使编译器可见
+@interface BDHealthServiceCollectionCell (Tweak)
+- (void)removePlaceholderImageViews;
+- (void)removeAllImageViewsInView:(UIView *)view;
 @end
 
 // 开始 Hook
