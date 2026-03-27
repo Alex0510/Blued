@@ -1,227 +1,200 @@
-/* Tweak.xm - 移除 BDHealthServiceCollectionCell 中的占位插图 */
+// Tweak.xm
 #import <UIKit/UIKit.h>
+#import <Foundation/Foundation.h>
+#import <objc/runtime.h>
+#import <objc/message.h>
 
-// 完整的类接口声明（已移除 .cxx_destruct）
-@interface BDHealthServiceCollectionCell : UIView
-// 属性
-@property id centerView;
-@property id titleLabel;
-@property id mainStackView;
-@property id firstCollectionTitle;
-@property id firstCollectionImgView;
-@property id secondCollectionTitle;
-@property id secondCollectionImgView;
-@property id publicBenefitView;
-@property id publicBenefitTitleLabel;
-@property id publicBenefitDescLabel;
-@property id publicStackView;
-@property id publicStackImgView1;
-@property id publicStackImgView2;
-@property id hullHealthView;
-@property id hullHealthTitleLabel;
-@property id hullHealthDescLabel;
-@property id hullHealthImgView;
-@property id healthStoreView;
-@property id healthLineView;
-@property id healthStoreTitleLabel;
-@property id healthStoreDescLabel;
-@property id healthStackView;
-@property id healthStackImgView1;
-@property id healthStackImgView2;
-@property id publicBenefitAndHullHealthView2;
-@property id publicBenefitView2;
-@property id publicBenefitImageView2;
-@property id publicBenefitTitleLabel2;
-@property id publicBenefitDescLabel2;
-@property id hullHealthView2;
-@property id hullHealthImgView2;
-@property id hullHealthTitleLabel2;
-@property id hullHealthDescLabel2;
-@property id productToPromotionView;
-@property id separateLineView;
-@property id productListScrollView;
-@property id publicBenefitModel;
-@property id hullHealthModel;
-@property id productToPromotionViewsArrayM;
-@property id cTimer;
-@property id healthStoreModel;
-@property id marqueeView;
-@property id marqueeItemView;
-@property id redPointView1;
-@property id redPointView2;
-@property id redPointView3;
-@property id bannerSortDictM;
-@property BOOL isTouristsMode;
-@property id signal;
-
-// 原始方法（可选，仅为了完整性）
-- (void)awakeFromNib;
-- (void)setSignal:(id)arg;
-- (void)layoutSubviews;
-- (void)startTimer;
-- (void)addObserver;
-- (uint64_t)textLength:(id)arg;
-- (id)subText:(id)arg toLength:(long long)len;
-- (void)stopMarquee;
-- (void)clickPublicBenefitView;
-- (void)clickHullHealthView;
-- (void)clickHealthStoreView;
-- (void)clickProductToPromotionView:(id)view redPointInView:(id)redPoint;
-- (void)clickFirstCollection:(id)arg;
-- (void)clickSecondCollection:(id)arg;
-- (Class)customMarqueeItemViewClass;
-- (void)didSelectedModel:(id)model atIndex:(int)index;
-- (id)marqueeView;
-- (id)marqueeItemView;
-- (id)redPointView1;
-- (id)redPointView2;
-- (id)redPointView3;
-- (id)productListScrollView;
-- (id)bannerSortDictM;
-- (BOOL)isTouristsMode;
-- (void)setIsTouristsMode:(BOOL)mode;
-- (id)signal;
-- (id)centerView;
-- (void)setCenterView:(id)view;
-- (id)titleLabel;
-- (void)setTitleLabel:(id)label;
-- (id)mainStackView;
-- (void)setMainStackView:(id)view;
-- (id)firstCollectionTitle;
-- (void)setFirstCollectionTitle:(id)title;
-- (id)firstCollectionImgView;
-- (void)setFirstCollectionImgView:(id)view;
-- (id)secondCollectionTitle;
-- (void)setSecondCollectionTitle:(id)title;
-- (id)secondCollectionImgView;
-- (void)setSecondCollectionImgView:(id)view;
-- (id)publicBenefitView;
-- (void)setPublicBenefitView:(id)view;
-- (id)publicBenefitTitleLabel;
-- (void)setPublicBenefitTitleLabel:(id)label;
-- (id)publicBenefitDescLabel;
-- (void)setPublicBenefitDescLabel:(id)label;
-- (id)publicStackView;
-- (void)setPublicStackView:(id)view;
-- (id)publicStackImgView1;
-- (void)setPublicStackImgView1:(id)view;
-- (id)publicStackImgView2;
-- (void)setPublicStackImgView2:(id)view;
-- (id)hullHealthView;
-- (void)setHullHealthView:(id)view;
-- (id)hullHealthTitleLabel;
-- (void)setHullHealthTitleLabel:(id)label;
-- (id)hullHealthDescLabel;
-- (void)setHullHealthDescLabel:(id)label;
-- (id)hullHealthImgView;
-- (void)setHullHealthImgView:(id)view;
-- (id)healthStoreView;
-- (void)setHealthStoreView:(id)view;
-- (id)healthLineView;
-- (void)setHealthLineView:(id)view;
-- (id)healthStoreTitleLabel;
-- (void)setHealthStoreTitleLabel:(id)label;
-- (id)healthStoreDescLabel;
-- (void)setHealthStoreDescLabel:(id)label;
-- (id)healthStackView;
-- (void)setHealthStackView:(id)view;
-- (id)healthStackImgView1;
-- (void)setHealthStackImgView1:(id)view;
-- (id)healthStackImgView2;
-- (void)setHealthStackImgView2:(id)view;
-- (id)publicBenefitAndHullHealthView2;
-- (void)setPublicBenefitAndHullHealthView2:(id)view;
-- (id)publicBenefitView2;
-- (void)setPublicBenefitView2:(id)view;
-- (id)publicBenefitImageView2;
-- (void)setPublicBenefitImageView2:(id)view;
-- (id)publicBenefitTitleLabel2;
-- (void)setPublicBenefitTitleLabel2:(id)label;
-- (id)publicBenefitDescLabel2;
-- (void)setPublicBenefitDescLabel2:(id)label;
-- (id)hullHealthView2;
-- (void)setHullHealthView2:(id)view;
-- (id)hullHealthImgView2;
-- (void)setHullHealthImgView2:(id)view;
-- (id)hullHealthTitleLabel2;
-- (void)setHullHealthTitleLabel2:(id)label;
-- (id)hullHealthDescLabel2;
-- (void)setHullHealthDescLabel2:(id)label;
-- (id)productToPromotionView;
-- (void)setProductToPromotionView:(id)view;
-- (id)separateLineView;
-- (void)setSeparateLineView:(id)view;
-- (void)setProductListScrollView:(id)view;
-- (id)publicBenefitModel;
-- (void)setPublicBenefitModel:(id)model;
-- (id)hullHealthModel;
-- (void)setHullHealthModel:(id)model;
-- (id)productToPromotionViewsArrayM;
-- (void)setProductToPromotionViewsArrayM:(id)array;
-- (id)cTimer;
-- (void)setCTimer:(id)timer;
-- (id)healthStoreModel;
-- (void)setHealthStoreModel:(id)model;
-- (void)setMarqueeView:(id)view;
-- (void)setMarqueeItemView:(id)view;
-- (void)setRedPointView1:(id)view;
-- (void)setRedPointView2:(id)view;
-- (void)setRedPointView3:(id)view;
-- (void)setBannerSortDictM:(id)dict;
-@end
-
-// 添加类别声明新方法，使编译器可见
-@interface BDHealthServiceCollectionCell (Tweak)
-- (void)removePlaceholderImageViews;
-- (void)removeAllImageViewsInView:(UIView *)view;
-@end
-
-// 开始 Hook
-%hook BDHealthServiceCollectionCell
-
-// 在 awakeFromNib 中执行移除操作
-- (void)awakeFromNib {
-    %orig;
-    [self removePlaceholderImageViews];
+#pragma mark - 工具函数
+static void swizzleMethod(Class cls, SEL original, SEL replacement) {
+    Method origMethod = class_getInstanceMethod(cls, original);
+    Method newMethod = class_getInstanceMethod(cls, replacement);
+    if (class_addMethod(cls, original, method_getImplementation(newMethod), method_getTypeEncoding(newMethod))) {
+        class_replaceMethod(cls, replacement, method_getImplementation(origMethod), method_getTypeEncoding(origMethod));
+    } else {
+        method_exchangeImplementations(origMethod, newMethod);
+    }
 }
 
-// 使用 %new 添加新方法：移除指定的占位视图
-%new
-- (void)removePlaceholderImageViews {
-    NSArray<NSString *> *viewProps = @[
-        @"firstCollectionImgView",
-        @"secondCollectionImgView",
-        @"publicStackImgView1",
-        @"publicStackImgView2",
-        @"hullHealthImgView",
-        @"healthStackImgView1",
-        @"healthStackImgView2",
-        @"publicBenefitImageView2",
-        @"hullHealthImgView2",
-        @"redPointView1",
-        @"redPointView2",
-        @"redPointView3"
-    ];
+static void setPropertyIfExists(id obj, NSString *key, id value) {
+    if (!obj) return;
+    NSString *setterName = [NSString stringWithFormat:@"set%@:", [key capitalizedString]];
+    SEL setter = NSSelectorFromString(setterName);
+    if ([obj respondsToSelector:setter]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(obj, setter, value);
+        printf("[BluedPrivacy] Set property via setter: %s -> %d\n", [key UTF8String], [value boolValue]);
+    } else {
+        @try {
+            [obj setValue:value forKey:key];
+            printf("[BluedPrivacy] Set property via KVC: %s -> %d\n", [key UTF8String], [value boolValue]);
+        } @catch (NSException *e) {
+            printf("[BluedPrivacy] KVC failed for %s: %s\n", [key UTF8String], [[e reason] UTF8String]);
+        }
+    }
+}
+
+#pragma mark - 要设置的隐私属性列表
+static NSArray<NSString *> *privacyKeys(void) {
+    static NSArray *keys = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        keys = @[
+            @"isTracelessAccess",
+            @"isGlobalViewSecretly",
+            @"isAgeStealth",
+            @"isRoleStealth",
+            @"isStealthDistance",
+            @"isHideLastOperate",
+            @"isHideDistance"
+        ];
+    });
+    return keys;
+}
+
+static void enableAllPrivacyFeatures(id model) {
+    if (!model) return;
+    printf("[BluedPrivacy] Enabling privacy for %s\n", class_getName([model class]));
+    for (NSString *key in privacyKeys()) {
+        setPropertyIfExists(model, key, @YES);
+    }
+}
+
+#pragma mark - Hook BDMineUserModel 的初始化方法
+static void hookBDMineUserModel(void) {
+    Class cls = NSClassFromString(@"BDMineUserModel");
+    if (!cls) {
+        printf("[BluedPrivacy] BDMineUserModel not found\n");
+        return;
+    }
     
-    for (NSString *prop in viewProps) {
-        UIView *view = [self valueForKey:prop];
-        if (view && [view isKindOfClass:[UIView class]]) {
-            [view removeFromSuperview];
-            NSLog(@"[Tweak] Removed %@ from BDHealthServiceCollectionCell", prop);
+    // Hook init 方法（如果有）
+    SEL initSel = @selector(init);
+    if (class_getInstanceMethod(cls, initSel)) {
+        __block IMP originalInit = NULL;
+        IMP newInit = imp_implementationWithBlock(^(id self) {
+            id result = ((id (*)(id, SEL))originalInit)(self, initSel);
+            if (result) enableAllPrivacyFeatures(result);
+            return result;
+        });
+        Method method = class_getInstanceMethod(cls, initSel);
+        if (method) {
+            originalInit = method_getImplementation(method);
+            class_replaceMethod(cls, @selector(privacy_init), newInit, method_getTypeEncoding(method));
+            swizzleMethod(cls, initSel, @selector(privacy_init));
+        }
+    }
+    
+    // Hook initWithCoder:
+    SEL coderSel = @selector(initWithCoder:);
+    if (class_getInstanceMethod(cls, coderSel)) {
+        __block IMP originalCoder = NULL;
+        IMP newCoder = imp_implementationWithBlock(^(id self, NSCoder *coder) {
+            id result = ((id (*)(id, SEL, NSCoder*))originalCoder)(self, coderSel, coder);
+            if (result) enableAllPrivacyFeatures(result);
+            return result;
+        });
+        Method method = class_getInstanceMethod(cls, coderSel);
+        if (method) {
+            originalCoder = method_getImplementation(method);
+            class_replaceMethod(cls, @selector(privacy_initWithCoder:), newCoder, method_getTypeEncoding(method));
+            swizzleMethod(cls, coderSel, @selector(privacy_initWithCoder:));
         }
     }
 }
 
-// 使用 %new 添加新方法：递归移除所有 UIImageView
-%new
-- (void)removeAllImageViewsInView:(UIView *)view {
-    for (UIView *subview in view.subviews) {
-        if ([subview isKindOfClass:[UIImageView class]]) {
-            [subview removeFromSuperview];
-        } else {
-            [self removeAllImageViewsInView:subview];
+#pragma mark - Hook BDActivityDetailUserInfo 的初始化方法
+static void hookBDActivityDetailUserInfo(void) {
+    Class cls = NSClassFromString(@"BDActivityDetailUserInfo");
+    if (!cls) {
+        printf("[BluedPrivacy] BDActivityDetailUserInfo not found\n");
+        return;
+    }
+    
+    // Hook initWithCoder: (最可能)
+    SEL coderSel = @selector(initWithCoder:);
+    if (class_getInstanceMethod(cls, coderSel)) {
+        __block IMP originalCoder = NULL;
+        IMP newCoder = imp_implementationWithBlock(^(id self, NSCoder *coder) {
+            id result = ((id (*)(id, SEL, NSCoder*))originalCoder)(self, coderSel, coder);
+            if (result) enableAllPrivacyFeatures(result);
+            return result;
+        });
+        Method method = class_getInstanceMethod(cls, coderSel);
+        if (method) {
+            originalCoder = method_getImplementation(method);
+            class_replaceMethod(cls, @selector(privacy_initWithCoder:), newCoder, method_getTypeEncoding(method));
+            swizzleMethod(cls, coderSel, @selector(privacy_initWithCoder:));
         }
     }
 }
 
-%end
+#pragma mark - 截屏保护（保留）
+static void enableScreenshotProtection(void) {
+    Class managerClass = NSClassFromString(@"BDChatProtectionManager");
+    if (managerClass) {
+        SEL sharedSel = NSSelectorFromString(@"sharedInstance");
+        if ([managerClass respondsToSelector:sharedSel]) {
+            id manager = ((id (*)(id, SEL))objc_msgSend)(managerClass, sharedSel);
+            if (manager) {
+                setPropertyIfExists(manager, @"is_prohibit_chat_screenshot", @YES);
+            }
+        }
+    }
+    Class modelClass = NSClassFromString(@"BDChatProtectionModel");
+    if (modelClass) {
+        SEL sharedSel = NSSelectorFromString(@"sharedModel");
+        if ([modelClass respondsToSelector:sharedSel]) {
+            id model = ((id (*)(id, SEL))objc_msgSend)(modelClass, sharedSel);
+            if (model) {
+                setPropertyIfExists(model, @"is_prohibit_chat_screenshot", @YES);
+            }
+        }
+    }
+}
+
+#pragma mark - 主动获取当前用户模型（登录后）
+static void applyToCurrentUserModel(void) {
+    id appDelegate = [UIApplication sharedApplication].delegate;
+    if (!appDelegate) return;
+    
+    // 尝试获取 mineModel (BDMineUserModel)
+    id mineModel = [appDelegate valueForKey:@"mineModel"];
+    if (mineModel) {
+        enableAllPrivacyFeatures(mineModel);
+    }
+    
+    // 也可以尝试其他可能存储用户信息的属性
+    id userInfo = [appDelegate valueForKey:@"userInfo"];
+    if (userInfo) {
+        enableAllPrivacyFeatures(userInfo);
+    }
+}
+
+#pragma mark - 监听登录成功
+static void observeLoginSuccess(void) {
+    // 监听所有通知，找出登录成功的通知名（实际应用中可能是特定通知）
+    [[NSNotificationCenter defaultCenter] addObserverForName:nil object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+        // 打印通知名以便调试
+        printf("[BluedPrivacy] Notification: %s\n", [note.name UTF8String]);
+        // 常见的登录成功通知名可能是这些
+        if ([note.name isEqualToString:@"BDLoginSuccessNotification"] ||
+            [note.name isEqualToString:@"kBDLoginSuccessNotification"] ||
+            [note.name isEqualToString:@"LoginSuccess"] ||
+            [note.name isEqualToString:@"UserDidLoginNotification"]) {
+            printf("[BluedPrivacy] Login success detected, applying privacy settings\n");
+            applyToCurrentUserModel();
+        }
+    }];
+}
+
+#pragma mark - 入口
+__attribute__((constructor))
+static void initialize(void) {
+    printf("[BluedPrivacy] dylib loaded\n");
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        hookBDMineUserModel();
+        hookBDActivityDetailUserInfo();
+        enableScreenshotProtection();
+        applyToCurrentUserModel(); // 尝试立即设置（如果已登录）
+        observeLoginSuccess();
+    });
+}
