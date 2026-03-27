@@ -23,6 +23,7 @@ static void setPropertyIfExists(id obj, NSString *key, id value) {
         ((void (*)(id, SEL, id))objc_msgSend)(obj, setter, value);
         printf("[BluedPrivacy] Set property via setter: %s -> %d\n", [key UTF8String], [value boolValue]);
     } else {
+        // 如果 setter 不存在，尝试 KVC（但需要确保 key 存在）
         @try {
             [obj setValue:value forKey:key];
             printf("[BluedPrivacy] Set property via KVC: %s -> %d\n", [key UTF8String], [value boolValue]);
@@ -58,6 +59,39 @@ static void enableAllPrivacyFeatures(id model) {
     }
 }
 
+#pragma mark - 安全地获取用户模型对象
+static id getCurrentUserModel(void) {
+    id appDelegate = [UIApplication sharedApplication].delegate;
+    if (!appDelegate) {
+        printf("[BluedPrivacy] AppDelegate not found\n");
+        return nil;
+    }
+
+    // 方法1：尝试直接获取 mineModel 属性（BDMineUserModel 类型）
+    if ([appDelegate respondsToSelector:@selector(mineModel)]) {
+        id model = ((id (*)(id, SEL))objc_msgSend)(appDelegate, @selector(mineModel));
+        if (model) {
+            // 检查类型，确保是 BDMineUserModel 或 BDActivityDetailUserInfo
+            Class expectedClass = NSClassFromString(@"BDMineUserModel");
+            if (expectedClass && [model isKindOfClass:expectedClass]) {
+                return model;
+            }
+            // 如果是其他类型，也可能包含我们需要的属性，尝试使用
+            return model;
+        }
+    }
+
+    // 方法2：尝试 userInfo 属性（可能也是 BDMineUserModel 或 BDActivityDetailUserInfo）
+    if ([appDelegate respondsToSelector:@selector(userInfo)]) {
+        id model = ((id (*)(id, SEL))objc_msgSend)(appDelegate, @selector(userInfo));
+        if (model) return model;
+    }
+
+    // 方法3：通过 other 已知路径获取（如 AppDelegate 的 mineModel 可能存储在某个属性中）
+    // 这里不再使用 valueForKey: 以避免潜在异常
+    return nil;
+}
+
 #pragma mark - Hook BDMineUserModel 的初始化方法
 static void hookBDMineUserModel(void) {
     Class cls = NSClassFromString(@"BDMineUserModel");
@@ -66,7 +100,7 @@ static void hookBDMineUserModel(void) {
         return;
     }
     
-    // Hook init 方法（如果有）
+    // Hook init 方法
     SEL initSel = @selector(init);
     if (class_getInstanceMethod(cls, initSel)) {
         __block IMP originalInit = NULL;
@@ -109,7 +143,7 @@ static void hookBDActivityDetailUserInfo(void) {
         return;
     }
     
-    // Hook initWithCoder: (最可能)
+    // Hook initWithCoder:
     SEL coderSel = @selector(initWithCoder:);
     if (class_getInstanceMethod(cls, coderSel)) {
         __block IMP originalCoder = NULL;
@@ -127,7 +161,7 @@ static void hookBDActivityDetailUserInfo(void) {
     }
 }
 
-#pragma mark - 截屏保护（保留）
+#pragma mark - 截屏保护
 static void enableScreenshotProtection(void) {
     Class managerClass = NSClassFromString(@"BDChatProtectionManager");
     if (managerClass) {
@@ -153,19 +187,11 @@ static void enableScreenshotProtection(void) {
 
 #pragma mark - 主动获取当前用户模型（登录后）
 static void applyToCurrentUserModel(void) {
-    id appDelegate = [UIApplication sharedApplication].delegate;
-    if (!appDelegate) return;
-    
-    // 尝试获取 mineModel (BDMineUserModel)
-    id mineModel = [appDelegate valueForKey:@"mineModel"];
-    if (mineModel) {
-        enableAllPrivacyFeatures(mineModel);
-    }
-    
-    // 也可以尝试其他可能存储用户信息的属性
-    id userInfo = [appDelegate valueForKey:@"userInfo"];
-    if (userInfo) {
-        enableAllPrivacyFeatures(userInfo);
+    id userModel = getCurrentUserModel();
+    if (userModel) {
+        enableAllPrivacyFeatures(userModel);
+    } else {
+        printf("[BluedPrivacy] No user model found\n");
     }
 }
 
@@ -190,6 +216,7 @@ static void observeLoginSuccess(void) {
 __attribute__((constructor))
 static void initialize(void) {
     printf("[BluedPrivacy] dylib loaded\n");
+    // 延迟执行，确保应用已经启动
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         hookBDMineUserModel();
         hookBDActivityDetailUserInfo();
