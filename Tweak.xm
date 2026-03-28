@@ -2,30 +2,6 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
-static void DummyStartAnimation(id self, SEL _cmd) {
-    // 阻止 SVGA 动画播放
-}
-
-static void DummyStartAnimationWithRange(id self, SEL _cmd, NSRange range, BOOL reverse) {
-    // 阻止带范围的动画播放
-}
-
-static void DummyPlayWithResource(id self, SEL _cmd, id resource, id bundle, id sizeBlock, id completion) {
-    // 阻止播放资源
-}
-
-static void DummyPlayWithURLString(id self, SEL _cmd, id urlString, id sizeBlock, id completion) {
-    // 阻止播放 URL
-}
-
-static void DummyPlayWithResourceOnly(id self, SEL _cmd, id resource, id bundle, id completion) {
-    // 阻止播放资源
-}
-
-static void DummyPlayWithURLStringOnly(id self, SEL _cmd, id urlString, id completion) {
-    // 阻止播放 URL
-}
-
 __attribute__((constructor))
 static void disableSVGA() {
     @autoreleasepool {
