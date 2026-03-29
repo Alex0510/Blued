@@ -17,7 +17,7 @@ TWEAK_NAME = BluedAd
 
 BluedAd_FILES = Tweak.xm
 BluedAd_CFLAGS = -fobjc-arc
-BluedAd_LDFLAGS = -lz
+BluedAd_FRAMEWORKS = UIKit CoreLocation MapKit
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
