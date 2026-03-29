@@ -18,6 +18,7 @@
 
 static UIWindow *floatWindow;
 static NSMutableArray *users;
+static dispatch_queue_t userQueue;
 
 #pragma mark - 安全获取 KeyWindow（iOS13+适配）
 
@@ -63,14 +64,22 @@ void openMap(double lat, double lon) {
     self.view.backgroundColor = UIColor.whiteColor;
     MKMapView *map = [[MKMapView alloc] initWithFrame:self.view.bounds];
     [self.view addSubview:map];
-
-    @synchronized (users) {
-        for (BDUserInfo *u in users) {
-            MKPointAnnotation *ann = [MKPointAnnotation new];
-            ann.coordinate = CLLocationCoordinate2DMake(u.latitude, u.longitude);
-            ann.title = u.name ?: @"User";
-            [map addAnnotation:ann];
-        }
+    
+    // 获取 users 的快照副本，避免遍历过程中数据被修改
+    __block NSArray *snapshot = nil;
+    if (userQueue) {
+        dispatch_sync(userQueue, ^{
+            snapshot = [users copy];
+        });
+    } else {
+        snapshot = @[];
+    }
+    
+    for (BDUserInfo *u in snapshot) {
+        MKPointAnnotation *ann = [MKPointAnnotation new];
+        ann.coordinate = CLLocationCoordinate2DMake(u.latitude, u.longitude);
+        ann.title = u.name ?: @"User";
+        [map addAnnotation:ann];
     }
 }
 
@@ -92,11 +101,16 @@ void showMap() {
 void createFloatUI() {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        // 初始化串行队列
+        userQueue = dispatch_queue_create("com.radar.userQueue", DISPATCH_QUEUE_SERIAL);
+        // 初始化数组（在队列外初始化即可，因为 dispatch_once 保证单线程）
         users = [NSMutableArray new];
+        
         floatWindow = [[UIWindow alloc] initWithFrame:CGRectMake(40, 200, 60, 60)];
         floatWindow.windowLevel = UIWindowLevelAlert + 1;
         UIViewController *vc = [UIViewController new];
         floatWindow.rootViewController = vc;
+        
         UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
         btn.frame = floatWindow.bounds;
         btn.layer.cornerRadius = 30;
@@ -104,8 +118,10 @@ void createFloatUI() {
         [btn setTitle:@"雷达" forState:UIControlStateNormal];
         [btn addTarget:vc action:@selector(openMapAction) forControlEvents:UIControlEventTouchUpInside];
         [floatWindow addSubview:btn];
+        
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:vc action:@selector(pan:)];
         [btn addGestureRecognizer:pan];
+        
         floatWindow.hidden = NO;
     });
 }
@@ -130,18 +146,37 @@ void createFloatUI() {
 
 @end
 
-#pragma mark - 数据
+#pragma mark - 数据（线程安全）
 
 void addUser(BDUserInfo *u) {
     if (!u) return;
-    @synchronized (users) {
-        for (BDUserInfo *x in users) {
-            if (x.latitude == u.latitude && x.longitude == u.longitude) {
-                return;
-            }
-        }
-        [users addObject:u];
+    
+    // 确保队列已存在（如果 createFloatUI 还未调用，则主动初始化）
+    if (!userQueue) {
+        createFloatUI();
     }
+    
+    // 在串行队列中执行添加和去重操作
+    dispatch_sync(userQueue, ^{
+        @try {
+            // 去重
+            for (BDUserInfo *x in users) {
+                if (x.latitude == u.latitude && x.longitude == u.longitude) {
+                    return;
+                }
+            }
+            [users addObject:u];
+            
+            // 限制数组最大数量，防止内存无限增长（最多保留200个）
+            if (users.count > 200) {
+                NSRange removeRange = NSMakeRange(0, users.count - 200);
+                [users removeObjectsInRange:removeRange];
+            }
+        } @catch (NSException *exception) {
+            // 发生异常时静默处理，防止崩溃
+            NSLog(@"[RadarPlugin] addUser exception: %@", exception);
+        }
+    });
 }
 
 #pragma mark - Hook
@@ -151,7 +186,7 @@ void addUser(BDUserInfo *u) {
 - (void)setUserInfo:(BDUserInfo *)userInfo {
     %orig;
     if (userInfo) {
-        createFloatUI();
+        createFloatUI();   // 确保悬浮窗和队列已创建
         addUser(userInfo);
     }
 }
