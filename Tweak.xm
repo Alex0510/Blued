@@ -1,124 +1,65 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
-#import <objc/message.h>
 
 __attribute__((constructor))
-static void disableSVGA() {
+static void enableTracelessAccess() {
     @autoreleasepool {
-        // Hook SVGAPlayer
-        Class svgaPlayer = NSClassFromString(@"SVGAPlayer");
-        if (svgaPlayer) {
-            // startAnimation
-            SEL startSel = @selector(startAnimation);
-            Method startMethod = class_getInstanceMethod(svgaPlayer, startSel);
-            if (startMethod) {
-                class_replaceMethod(svgaPlayer, startSel,
-                                    imp_implementationWithBlock(^(id self) {
-                                        // 调用 delegate 完成回调，模拟动画结束
-                                        id delegate = [self valueForKey:@"delegate"];
-                                        if (delegate && [delegate respondsToSelector:@selector(svgaPlayerDidFinishedAnimation:)]) {
-                                            #pragma clang diagnostic push
-                                            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-                                            [delegate performSelector:@selector(svgaPlayerDidFinishedAnimation:) withObject:self];
-                                            #pragma clang diagnostic pop
-                                        }
-                                        // 清理播放状态
-                                        [self performSelector:@selector(stopAnimation)];
-                                    }),
-                                    method_getTypeEncoding(startMethod));
-            }
+        // 1. 获取 UserSetting 类
+        Class userSettingClass = NSClassFromString(@"UserSetting");
+        if (!userSettingClass) return;
 
-            // startAnimationWithRange:reverse:
-            SEL rangeSel = @selector(startAnimationWithRange:reverse:);
-            Method rangeMethod = class_getInstanceMethod(svgaPlayer, rangeSel);
-            if (rangeMethod) {
-                class_replaceMethod(svgaPlayer, rangeSel,
-                                    imp_implementationWithBlock(^(id self, NSRange range, BOOL reverse) {
-                                        id delegate = [self valueForKey:@"delegate"];
-                                        if (delegate && [delegate respondsToSelector:@selector(svgaPlayerDidFinishedAnimation:)]) {
-                                            #pragma clang diagnostic push
-                                            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-                                            [delegate performSelector:@selector(svgaPlayerDidFinishedAnimation:) withObject:self];
-                                            #pragma clang diagnostic pop
-                                        }
-                                        [self performSelector:@selector(stopAnimation)];
-                                    }),
-                                    method_getTypeEncoding(rangeMethod));
+        // 2. 强制 setter 将传入值改为 1
+        SEL setterSel = @selector(setIs_traceless_access:);
+        Method originalSetter = class_getInstanceMethod(userSettingClass, setterSel);
+        if (originalSetter) {
+            IMP newImp = imp_implementationWithBlock(^(id self, int value) {
+                // 忽略传入值，强制设为 1
+                ((void (*)(id, SEL, int))method_getImplementation(originalSetter))(self, setterSel, 1);
+            });
+            class_replaceMethod(userSettingClass, setterSel, newImp, method_getTypeEncoding(originalSetter));
+        }
+
+        // 3. 强制 getter 返回 1
+        SEL getterSel = @selector(is_traceless_access);
+        Method originalGetter = class_getInstanceMethod(userSettingClass, getterSel);
+        if (originalGetter) {
+            IMP newImp = imp_implementationWithBlock(^(id self) {
+                return 1;
+            });
+            class_replaceMethod(userSettingClass, getterSel, newImp, method_getTypeEncoding(originalGetter));
+        }
+
+        // 4. 如果 UserSetting 存在单例，在初始化时主动设置
+        SEL sharedSel = NSSelectorFromString(@"shared");
+        if ([userSettingClass respondsToSelector:sharedSel]) {
+            id sharedInstance = ((id (*)(id, SEL))objc_msgSend)(userSettingClass, sharedSel);
+            if (sharedInstance) {
+                ((void (*)(id, SEL, int))objc_msgSend)(sharedInstance, setterSel, 1);
+            }
+        } else {
+            // 尝试通过归档等方式获取当前设置实例，这里简化为遍历所有实例（效率较低，仅示例）
+            // 通常单例模式更常见，若没有则忽略
+        }
+
+        // 5. 可选：Hook 网络请求，确保提交到服务器的参数中也包含 is_traceless_access=1
+        // 这里假设设置通过 BDHTTPManager 的某个方法提交，例如 updateUserSetting:
+        Class httpManagerClass = NSClassFromString(@"BDHTTPManager");
+        if (httpManagerClass) {
+            SEL updateSel = NSSelectorFromString(@"updateUserSetting:");
+            Method originalUpdate = class_getInstanceMethod(httpManagerClass, updateSel);
+            if (originalUpdate) {
+                IMP newImp = imp_implementationWithBlock(^(id self, NSDictionary *params) {
+                    // 修改参数
+                    NSMutableDictionary *newParams = [params mutableCopy];
+                    newParams[@"is_traceless_access"] = @(1);
+                    ((void (*)(id, SEL, id))method_getImplementation(originalUpdate))(self, updateSel, newParams);
+                });
+                class_replaceMethod(httpManagerClass, updateSel, newImp, method_getTypeEncoding(originalUpdate));
             }
         }
 
-        // Hook BDSVGAAnimationView
-        Class svgaView = NSClassFromString(@"BDSVGAAnimationView");
-        if (svgaView) {
-            // startAnimation
-            SEL startSel = @selector(startAnimation);
-            Method startMethod = class_getInstanceMethod(svgaView, startSel);
-            if (startMethod) {
-                class_replaceMethod(svgaView, startSel,
-                                    imp_implementationWithBlock(^(id self) {
-                                        // 调用 completionBlock 模拟动画完成
-                                        id completion = [self valueForKey:@"completionBlock"];
-                                        if (completion) {
-                                            ((void (^)(void))completion)();
-                                        }
-                                        // 停止动画（清理状态）
-                                        [self performSelector:@selector(stopAnimation)];
-                                    }),
-                                    method_getTypeEncoding(startMethod));
-            }
-
-            // playWithResource:bundle:sizeBlock:completion:
-            SEL play1Sel = @selector(playWithResource:bundle:sizeBlock:completion:);
-            Method play1Method = class_getInstanceMethod(svgaView, play1Sel);
-            if (play1Method) {
-                class_replaceMethod(svgaView, play1Sel,
-                                    imp_implementationWithBlock(^(id self, id res, id bundle, id sizeBlock, id completion) {
-                                        if (completion) {
-                                            ((void (^)(void))completion)();
-                                        }
-                                    }),
-                                    method_getTypeEncoding(play1Method));
-            }
-
-            // playWithURLString:sizeBlock:completion:
-            SEL play2Sel = @selector(playWithURLString:sizeBlock:completion:);
-            Method play2Method = class_getInstanceMethod(svgaView, play2Sel);
-            if (play2Method) {
-                class_replaceMethod(svgaView, play2Sel,
-                                    imp_implementationWithBlock(^(id self, id url, id sizeBlock, id completion) {
-                                        if (completion) {
-                                            ((void (^)(void))completion)();
-                                        }
-                                    }),
-                                    method_getTypeEncoding(play2Method));
-            }
-
-            // playWithResource:bundle:completion:
-            SEL play3Sel = @selector(playWithResource:bundle:completion:);
-            Method play3Method = class_getInstanceMethod(svgaView, play3Sel);
-            if (play3Method) {
-                class_replaceMethod(svgaView, play3Sel,
-                                    imp_implementationWithBlock(^(id self, id res, id bundle, id completion) {
-                                        if (completion) {
-                                            ((void (^)(void))completion)();
-                                        }
-                                    }),
-                                    method_getTypeEncoding(play3Method));
-            }
-
-            // playWithURLString:completion:
-            SEL play4Sel = @selector(playWithURLString:completion:);
-            Method play4Method = class_getInstanceMethod(svgaView, play4Sel);
-            if (play4Method) {
-                class_replaceMethod(svgaView, play4Sel,
-                                    imp_implementationWithBlock(^(id self, id url, id completion) {
-                                        if (completion) {
-                                            ((void (^)(void))completion)();
-                                        }
-                                    }),
-                                    method_getTypeEncoding(play4Method));
-            }
-        }
+        // 6. 输出日志，便于调试
+        NSLog(@"[Blued] 无痕访问已强制开启");
     }
 }
