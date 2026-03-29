@@ -33,7 +33,11 @@ static void enableTracelessAccess() {
         // 4. 如果 UserSetting 存在单例，主动设置一次
         SEL sharedSel = NSSelectorFromString(@"shared");
         if ([userSettingClass respondsToSelector:sharedSel]) {
-            id sharedInstance = [userSettingClass performSelector:sharedSel];
+            id sharedInstance = nil;
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+            sharedInstance = [userSettingClass performSelector:sharedSel];
+            #pragma clang diagnostic pop
             if (sharedInstance) {
                 [sharedInstance setValue:@1 forKey:@"is_traceless_access"];
             }
