@@ -65,7 +65,6 @@ void openMap(double lat, double lon) {
     MKMapView *map = [[MKMapView alloc] initWithFrame:self.view.bounds];
     [self.view addSubview:map];
     
-    // 获取 users 的快照副本，避免遍历过程中数据被修改
     __block NSArray *snapshot = nil;
     if (userQueue) {
         dispatch_sync(userQueue, ^{
@@ -101,28 +100,52 @@ void showMap() {
 void createFloatUI() {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        // 初始化串行队列
+        // 初始化队列
         userQueue = dispatch_queue_create("com.radar.userQueue", DISPATCH_QUEUE_SERIAL);
-        // 初始化数组（在队列外初始化即可，因为 dispatch_once 保证单线程）
         users = [NSMutableArray new];
         
-        floatWindow = [[UIWindow alloc] initWithFrame:CGRectMake(40, 200, 60, 60)];
-        floatWindow.windowLevel = UIWindowLevelAlert + 1;
-        UIViewController *vc = [UIViewController new];
-        floatWindow.rootViewController = vc;
-        
-        UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
-        btn.frame = floatWindow.bounds;
-        btn.layer.cornerRadius = 30;
-        btn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.8];
-        [btn setTitle:@"雷达" forState:UIControlStateNormal];
-        [btn addTarget:vc action:@selector(openMapAction) forControlEvents:UIControlEventTouchUpInside];
-        [floatWindow addSubview:btn];
-        
-        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:vc action:@selector(pan:)];
-        [btn addGestureRecognizer:pan];
-        
-        floatWindow.hidden = NO;
+        // 在主线程创建 UI
+        dispatch_async(dispatch_get_main_queue(), ^{
+            // 获取当前活跃的场景（iOS 13+ 必须关联 scene）
+            UIWindowScene *scene = nil;
+            if (@available(iOS 13.0, *)) {
+                for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
+                    if (s.activationState == UISceneActivationStateForegroundActive && [s isKindOfClass:[UIWindowScene class]]) {
+                        scene = (UIWindowScene *)s;
+                        break;
+                    }
+                }
+            }
+            
+            if (scene) {
+                floatWindow = [[UIWindow alloc] initWithWindowScene:scene];
+            } else {
+                floatWindow = [[UIWindow alloc] initWithFrame:CGRectMake(40, 200, 60, 60)];
+            }
+            
+            floatWindow.frame = CGRectMake(40, 200, 60, 60);
+            floatWindow.windowLevel = UIWindowLevelStatusBar + 1; // 高于状态栏
+            floatWindow.backgroundColor = [UIColor clearColor];
+            floatWindow.hidden = NO;
+            
+            UIViewController *vc = [UIViewController new];
+            vc.view.backgroundColor = [UIColor clearColor];
+            floatWindow.rootViewController = vc;
+            
+            UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
+            btn.frame = CGRectMake(0, 0, 60, 60);
+            btn.layer.cornerRadius = 30;
+            btn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.8];
+            [btn setTitle:@"雷达" forState:UIControlStateNormal];
+            [btn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+            [btn addTarget:vc action:@selector(openMapAction) forControlEvents:UIControlEventTouchUpInside];
+            [vc.view addSubview:btn];
+            
+            UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:vc action:@selector(pan:)];
+            [btn addGestureRecognizer:pan];
+            
+            [floatWindow makeKeyAndVisible]; // 确保显示
+        });
     });
 }
 
@@ -150,31 +173,19 @@ void createFloatUI() {
 
 void addUser(BDUserInfo *u) {
     if (!u) return;
+    if (!userQueue) createFloatUI();
     
-    // 确保队列已存在（如果 createFloatUI 还未调用，则主动初始化）
-    if (!userQueue) {
-        createFloatUI();
-    }
-    
-    // 在串行队列中执行添加和去重操作
     dispatch_sync(userQueue, ^{
         @try {
-            // 去重
             for (BDUserInfo *x in users) {
-                if (x.latitude == u.latitude && x.longitude == u.longitude) {
-                    return;
-                }
+                if (x.latitude == u.latitude && x.longitude == u.longitude) return;
             }
             [users addObject:u];
-            
-            // 限制数组最大数量，防止内存无限增长（最多保留200个）
             if (users.count > 200) {
-                NSRange removeRange = NSMakeRange(0, users.count - 200);
-                [users removeObjectsInRange:removeRange];
+                [users removeObjectsInRange:NSMakeRange(0, users.count - 200)];
             }
         } @catch (NSException *exception) {
-            // 发生异常时静默处理，防止崩溃
-            NSLog(@"[RadarPlugin] addUser exception: %@", exception);
+            NSLog(@"[Radar] addUser error: %@", exception);
         }
     });
 }
@@ -186,7 +197,7 @@ void addUser(BDUserInfo *u) {
 - (void)setUserInfo:(BDUserInfo *)userInfo {
     %orig;
     if (userInfo) {
-        createFloatUI();   // 确保悬浮窗和队列已创建
+        createFloatUI();
         addUser(userInfo);
     }
 }
