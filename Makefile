@@ -1,4 +1,4 @@
-ARCHS = arm64 arm64e
+8ARCHS = arm64 arm64e
 TARGET := iphone:clang:latest:14.0        # 目标 iOS 版本设高一些，兼容 TrollStore 所需的最低版本
 INSTALL_TARGET_PROCESSES = Blued
 THEOS_PACKAGE_SCHEME = rootless
@@ -13,11 +13,11 @@ endif
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = BluedAd
+TWEAK_NAME = Bluedmap
 
-BluedAd_FILES = Tweak.xm
-BluedAd_CFLAGS = -fobjc-arc
-BluedAd_FRAMEWORKS = UIKit CoreLocation MapKit
+Bluedmap_FILES = Tweak.xm
+Bluedmap_CFLAGS = -fobjc-arc
+Bluedmap_FRAMEWORKS = UIKit CoreLocation MapKit
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
