@@ -2,7 +2,7 @@
 #import <CoreLocation/CoreLocation.h>
 #import <MapKit/MapKit.h>
 
-#pragma mark - 模型
+#pragma mark - 模型（假设与原应用一致）
 
 @interface BDUserInfo : NSObject
 @property (nonatomic, strong) NSString *name;
@@ -17,8 +17,9 @@
 #pragma mark - 全局
 
 static UIWindow *floatWindow;
-static NSMutableArray *users;
+static NSMutableArray<BDUserInfo *> *users;
 static dispatch_queue_t userQueue;
+static CLLocation *currentLocation; // 存储当前用户位置
 
 #pragma mark - 安全获取 KeyWindow
 
@@ -29,9 +30,7 @@ UIWindow *getKeyWindow() {
             if (scene.activationState == UISceneActivationStateForegroundActive &&
                 [scene isKindOfClass:[UIWindowScene class]]) {
                 for (UIWindow *w in ((UIWindowScene *)scene).windows) {
-                    if (w.isKeyWindow) {
-                        return w;
-                    }
+                    if (w.isKeyWindow) return w;
                 }
             }
         }
@@ -44,13 +43,15 @@ UIWindow *getKeyWindow() {
     return key;
 }
 
-#pragma mark - 安全打开地图
+#pragma mark - 自定义标注（显示用户名和距离）
 
-void openMap(double lat, double lon) {
-    NSString *urlStr = [NSString stringWithFormat:@"http://maps.apple.com/?ll=%f,%f", lat, lon];
-    NSURL *url = [NSURL URLWithString:urlStr];
-    [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
-}
+@interface UserAnnotation : MKPointAnnotation
+@property (nonatomic, strong) BDUserInfo *userInfo;
+@property (nonatomic, assign) CLLocationDistance distance;
+@end
+
+@implementation UserAnnotation
+@end
 
 #pragma mark - 地图页面
 
@@ -60,6 +61,7 @@ void openMap(double lat, double lon) {
 @implementation RadarVC {
     MKMapView *_mapView;
     CLLocationManager *_locationManager;
+    BOOL _hasCentered;
 }
 
 - (void)viewDidLoad {
@@ -69,7 +71,7 @@ void openMap(double lat, double lon) {
     _mapView = [[MKMapView alloc] initWithFrame:self.view.bounds];
     _mapView.delegate = self;
     _mapView.showsUserLocation = YES;
-    _mapView.userTrackingMode = MKUserTrackingModeFollow;
+    _mapView.userTrackingMode = MKUserTrackingModeNone; // 避免自动跟随
     [self.view addSubview:_mapView];
     
     // 定位管理器
@@ -78,19 +80,14 @@ void openMap(double lat, double lon) {
     [_locationManager requestWhenInUseAuthorization];
     [_locationManager startUpdatingLocation];
     
-    // 获取其他用户标注
-    __block NSArray *snapshot = nil;
+    // 从全局数组获取用户标注
+    __block NSArray<BDUserInfo *> *snapshot = nil;
     if (userQueue) {
         dispatch_sync(userQueue, ^{
             snapshot = [users copy];
         });
     }
-    for (BDUserInfo *u in snapshot) {
-        MKPointAnnotation *ann = [MKPointAnnotation new];
-        ann.coordinate = CLLocationCoordinate2DMake(u.latitude, u.longitude);
-        ann.title = u.name ?: @"User";
-        [_mapView addAnnotation:ann];
-    }
+    [self addUserAnnotations:snapshot];
     
     // 关闭按钮
     UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -103,33 +100,118 @@ void openMap(double lat, double lon) {
     [self.view addSubview:closeBtn];
 }
 
-- (void)closeMap {
-    [self dismissViewControllerAnimated:YES completion:nil];
+- (void)addUserAnnotations:(NSArray<BDUserInfo *> *)userList {
+    for (BDUserInfo *u in userList) {
+        UserAnnotation *ann = [UserAnnotation new];
+        ann.coordinate = CLLocationCoordinate2DMake(u.latitude, u.longitude);
+        ann.title = u.name ?: @"用户";
+        ann.userInfo = u;
+        // 距离稍后计算（等定位更新后）
+        [_mapView addAnnotation:ann];
+    }
 }
+
+- (void)updateDistancesAndRegion {
+    if (!currentLocation) return;
+    
+    // 更新所有自定义标注的距离
+    for (id<MKAnnotation> ann in _mapView.annotations) {
+        if ([ann isKindOfClass:[UserAnnotation class]]) {
+            UserAnnotation *userAnn = (UserAnnotation *)ann;
+            CLLocation *userLoc = [[CLLocation alloc] initWithLatitude:userAnn.coordinate.latitude longitude:userAnn.coordinate.longitude];
+            userAnn.distance = [currentLocation distanceFromLocation:userLoc];
+            // 动态修改 subtitle 显示距离
+            if (userAnn.distance < 1000) {
+                userAnn.subtitle = [NSString stringWithFormat:@"%.0f米", userAnn.distance];
+            } else {
+                userAnn.subtitle = [NSString stringWithFormat:@"%.1f公里", userAnn.distance / 1000.0];
+            }
+        }
+    }
+    
+    // 刷新标注视图（重新加载 subtitle）
+    for (id<MKAnnotation> ann in _mapView.annotations) {
+        if (![ann isKindOfClass:[MKUserLocation class]]) {
+            MKAnnotationView *view = [_mapView viewForAnnotation:ann];
+            [view.annotation setCoordinate:view.annotation.coordinate]; // 触发更新
+        }
+    }
+    
+    // 调整地图区域以包含所有标注和用户位置（只执行一次）
+    if (!_hasCentered && _mapView.annotations.count > 0) {
+        _hasCentered = YES;
+        MKMapRect zoomRect = MKMapRectNull;
+        for (id<MKAnnotation> ann in _mapView.annotations) {
+            MKMapPoint point = MKMapPointForCoordinate(ann.coordinate);
+            MKMapRect pointRect = MKMapRectMake(point.x, point.y, 0.1, 0.1);
+            zoomRect = MKMapRectUnion(zoomRect, pointRect);
+        }
+        // 添加当前用户位置
+        if (_mapView.userLocation.coordinate.latitude != 0) {
+            MKMapPoint userPoint = MKMapPointForCoordinate(_mapView.userLocation.coordinate);
+            MKMapRect userRect = MKMapRectMake(userPoint.x, userPoint.y, 0.1, 0.1);
+            zoomRect = MKMapRectUnion(zoomRect, userRect);
+        }
+        [_mapView setVisibleMapRect:zoomRect edgePadding:UIEdgeInsetsMake(50, 50, 50, 50) animated:YES];
+    }
+}
+
+#pragma mark - CLLocationManagerDelegate
 
 - (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray<CLLocation *> *)locations {
-    [manager stopUpdatingLocation];
     CLLocation *loc = locations.lastObject;
-    if (loc) {
-        static dispatch_once_t onceToken;
-        dispatch_once(&onceToken, ^{
-            MKPointAnnotation *myAnn = [MKPointAnnotation new];
-            myAnn.coordinate = loc.coordinate;
-            myAnn.title = @"我的位置";
-            [_mapView addAnnotation:myAnn];
-        });
+    if (loc && !currentLocation) {
+        currentLocation = loc;
+        [self updateDistancesAndRegion];
+        [manager stopUpdatingLocation]; // 一次即可
     }
 }
 
+#pragma mark - MKMapViewDelegate
+
 - (MKAnnotationView *)mapView:(MKMapView *)mapView viewForAnnotation:(id<MKAnnotation>)annotation {
-    if ([annotation isKindOfClass:[MKUserLocation class]]) return nil;
-    static NSString *pid = @"pin";
-    MKPinAnnotationView *pin = (MKPinAnnotationView *)[mapView dequeueReusableAnnotationViewWithIdentifier:pid];
+    if ([annotation isKindOfClass:[MKUserLocation class]]) {
+        return nil; // 使用系统蓝点
+    }
+    static NSString *reuseId = @"UserAnnotation";
+    MKPinAnnotationView *pin = (MKPinAnnotationView *)[mapView dequeueReusableAnnotationViewWithIdentifier:reuseId];
     if (!pin) {
-        pin = [[MKPinAnnotationView alloc] initWithAnnotation:annotation reuseIdentifier:pid];
+        pin = [[MKPinAnnotationView alloc] initWithAnnotation:annotation reuseIdentifier:reuseId];
         pin.canShowCallout = YES;
+        pin.animatesDrop = NO;
+        pin.pinTintColor = [UIColor redColor]; // 其他用户用红色
+        // 添加右侧详细信息按钮
+        UIButton *detailBtn = [UIButton buttonWithType:UIButtonTypeDetailDisclosure];
+        pin.rightCalloutAccessoryView = detailBtn;
+    } else {
+        pin.annotation = annotation;
     }
     return pin;
+}
+
+- (void)mapView:(MKMapView *)mapView annotationView:(MKAnnotationView *)view calloutAccessoryControlTapped:(UIControl *)control {
+    if ([view.annotation isKindOfClass:[UserAnnotation class]]) {
+        UserAnnotation *userAnn = (UserAnnotation *)view.annotation;
+        NSString *message = [NSString stringWithFormat:@"昵称：%@\n经纬度：%.6f, %.6f\n距离：%@",
+                             userAnn.userInfo.name ?: @"未知",
+                             userAnn.coordinate.latitude,
+                             userAnn.coordinate.longitude,
+                             userAnn.subtitle ?: @"未知"];
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"用户详情" message:message preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"关闭" style:UIAlertActionStyleCancel handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
+    }
+}
+
+// 当地图显示用户位置后，再次尝试调整区域
+- (void)mapView:(MKMapView *)mapView didUpdateUserLocation:(MKUserLocation *)userLocation {
+    if (!_hasCentered) {
+        [self updateDistancesAndRegion];
+    }
+}
+
+- (void)closeMap {
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 @end
@@ -183,7 +265,6 @@ void createFloatUI() {
             btn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.8];
             [btn setTitle:@"雷达" forState:UIControlStateNormal];
             [btn setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-            // 修正 target：指向 vc，并实现 openMapAction 方法
             [btn addTarget:vc action:@selector(openMapAction) forControlEvents:UIControlEventTouchUpInside];
             [vc.view addSubview:btn];
             
@@ -195,7 +276,7 @@ void createFloatUI() {
     });
 }
 
-#pragma mark - UIViewController 扩展（实现拖拽和地图打开）
+#pragma mark - UIViewController 扩展
 
 @interface UIViewController (RadarFloat)
 - (void)openMapAction;
@@ -229,8 +310,9 @@ void addUser(BDUserInfo *u) {
             }
             [users addObject:u];
             if (users.count > 200) [users removeObjectsInRange:NSMakeRange(0, users.count - 200)];
+            NSLog(@"[Radar] 已添加用户: %@ (%.6f, %.6f)", u.name, u.latitude, u.longitude);
         } @catch (NSException *e) {
-            NSLog(@"[Radar] addUser error: %@", e);
+            NSLog(@"[Radar] 添加用户失败: %@", e);
         }
     });
 }
