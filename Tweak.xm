@@ -1,13 +1,19 @@
 #import <UIKit/UIKit.h>
 #import <CoreLocation/CoreLocation.h>
 #import <MapKit/MapKit.h>
+#import <objc/runtime.h>
 
-#pragma mark - 模型（假设与原应用一致）
+#pragma mark - 模型（扩展 BDUserInfo，增加距离等字段）
 
 @interface BDUserInfo : NSObject
 @property (nonatomic, strong) NSString *name;
 @property (nonatomic, assign) double latitude;
 @property (nonatomic, assign) double longitude;
+@property (nonatomic, assign) CLLocationDistance distance; // 可选，用于显示距离
+@property (nonatomic, strong) NSString *extraInfo;        // 存储其他信息
+@end
+
+@implementation BDUserInfo
 @end
 
 @interface BDHomeViewController : UIViewController
@@ -19,7 +25,7 @@
 static UIWindow *floatWindow;
 static NSMutableArray<BDUserInfo *> *users;
 static dispatch_queue_t userQueue;
-static CLLocation *currentLocation; // 存储当前用户位置
+static CLLocation *currentLocation;
 
 #pragma mark - 安全获取 KeyWindow
 
@@ -41,6 +47,74 @@ UIWindow *getKeyWindow() {
 #pragma clang diagnostic pop
     }
     return key;
+}
+
+#pragma mark - 辅助函数：从任意对象中提取用户信息
+
+BDUserInfo *extractUserInfoFromObject(id object) {
+    if (!object) return nil;
+    
+    BDUserInfo *info = [[BDUserInfo alloc] init];
+    
+    // 尝试获取常用属性名（兼容混淆符号）
+    NSArray *possibleLatKeys = @[@"latitude", @"lat", @"Latitude", @"mLatitude"];
+    NSArray *possibleLonKeys = @[@"longitude", @"lon", @"Longitude", @"mLongitude"];
+    NSArray *possibleNameKeys = @[@"name", @"nickname", @"displayName", @"userName", @"mName"];
+    NSArray *possibleDistKeys = @[@"distance", @"Distance", @"mDistance"];
+    
+    // 获取纬度
+    for (NSString *key in possibleLatKeys) {
+        @try {
+            id value = [object valueForKey:key];
+            if ([value respondsToSelector:@selector(doubleValue)]) {
+                info.latitude = [value doubleValue];
+                break;
+            }
+        } @catch (NSException *e) {}
+    }
+    
+    // 获取经度
+    for (NSString *key in possibleLonKeys) {
+        @try {
+            id value = [object valueForKey:key];
+            if ([value respondsToSelector:@selector(doubleValue)]) {
+                info.longitude = [value doubleValue];
+                break;
+            }
+        } @catch (NSException *e) {}
+    }
+    
+    // 获取昵称
+    for (NSString *key in possibleNameKeys) {
+        @try {
+            id value = [object valueForKey:key];
+            if ([value isKindOfClass:[NSString class]] && [value length] > 0) {
+                info.name = value;
+                break;
+            }
+        } @catch (NSException *e) {}
+    }
+    
+    // 获取距离（如果存在）
+    for (NSString *key in possibleDistKeys) {
+        @try {
+            id value = [object valueForKey:key];
+            if ([value respondsToSelector:@selector(doubleValue)]) {
+                info.distance = [value doubleValue];
+                break;
+            }
+        } @catch (NSException *e) {}
+    }
+    
+    // 如果经纬度无效，返回 nil
+    if (info.latitude == 0 && info.longitude == 0) {
+        return nil;
+    }
+    
+    // 如果没有名称，设置默认值
+    if (!info.name) info.name = @"用户";
+    
+    return info;
 }
 
 #pragma mark - 自定义标注（显示用户名和距离）
@@ -71,16 +145,14 @@ UIWindow *getKeyWindow() {
     _mapView = [[MKMapView alloc] initWithFrame:self.view.bounds];
     _mapView.delegate = self;
     _mapView.showsUserLocation = YES;
-    _mapView.userTrackingMode = MKUserTrackingModeNone; // 避免自动跟随
+    _mapView.userTrackingMode = MKUserTrackingModeNone;
     [self.view addSubview:_mapView];
     
-    // 定位管理器
     _locationManager = [CLLocationManager new];
     _locationManager.delegate = self;
     [_locationManager requestWhenInUseAuthorization];
     [_locationManager startUpdatingLocation];
     
-    // 从全局数组获取用户标注
     __block NSArray<BDUserInfo *> *snapshot = nil;
     if (userQueue) {
         dispatch_sync(userQueue, ^{
@@ -106,7 +178,6 @@ UIWindow *getKeyWindow() {
         ann.coordinate = CLLocationCoordinate2DMake(u.latitude, u.longitude);
         ann.title = u.name ?: @"用户";
         ann.userInfo = u;
-        // 距离稍后计算（等定位更新后）
         [_mapView addAnnotation:ann];
     }
 }
@@ -114,13 +185,11 @@ UIWindow *getKeyWindow() {
 - (void)updateDistancesAndRegion {
     if (!currentLocation) return;
     
-    // 更新所有自定义标注的距离
     for (id<MKAnnotation> ann in _mapView.annotations) {
         if ([ann isKindOfClass:[UserAnnotation class]]) {
             UserAnnotation *userAnn = (UserAnnotation *)ann;
             CLLocation *userLoc = [[CLLocation alloc] initWithLatitude:userAnn.coordinate.latitude longitude:userAnn.coordinate.longitude];
             userAnn.distance = [currentLocation distanceFromLocation:userLoc];
-            // 动态修改 subtitle 显示距离
             if (userAnn.distance < 1000) {
                 userAnn.subtitle = [NSString stringWithFormat:@"%.0f米", userAnn.distance];
             } else {
@@ -129,15 +198,14 @@ UIWindow *getKeyWindow() {
         }
     }
     
-    // 刷新标注视图（重新加载 subtitle）
+    // 刷新标注视图
     for (id<MKAnnotation> ann in _mapView.annotations) {
         if (![ann isKindOfClass:[MKUserLocation class]]) {
             MKAnnotationView *view = [_mapView viewForAnnotation:ann];
-            [view.annotation setCoordinate:view.annotation.coordinate]; // 触发更新
+            [view.annotation setCoordinate:view.annotation.coordinate];
         }
     }
     
-    // 调整地图区域以包含所有标注和用户位置（只执行一次）
     if (!_hasCentered && _mapView.annotations.count > 0) {
         _hasCentered = YES;
         MKMapRect zoomRect = MKMapRectNull;
@@ -146,7 +214,6 @@ UIWindow *getKeyWindow() {
             MKMapRect pointRect = MKMapRectMake(point.x, point.y, 0.1, 0.1);
             zoomRect = MKMapRectUnion(zoomRect, pointRect);
         }
-        // 添加当前用户位置
         if (_mapView.userLocation.coordinate.latitude != 0) {
             MKMapPoint userPoint = MKMapPointForCoordinate(_mapView.userLocation.coordinate);
             MKMapRect userRect = MKMapRectMake(userPoint.x, userPoint.y, 0.1, 0.1);
@@ -163,24 +230,21 @@ UIWindow *getKeyWindow() {
     if (loc && !currentLocation) {
         currentLocation = loc;
         [self updateDistancesAndRegion];
-        [manager stopUpdatingLocation]; // 一次即可
+        [manager stopUpdatingLocation];
     }
 }
 
 #pragma mark - MKMapViewDelegate
 
 - (MKAnnotationView *)mapView:(MKMapView *)mapView viewForAnnotation:(id<MKAnnotation>)annotation {
-    if ([annotation isKindOfClass:[MKUserLocation class]]) {
-        return nil; // 使用系统蓝点
-    }
+    if ([annotation isKindOfClass:[MKUserLocation class]]) return nil;
     static NSString *reuseId = @"UserAnnotation";
     MKPinAnnotationView *pin = (MKPinAnnotationView *)[mapView dequeueReusableAnnotationViewWithIdentifier:reuseId];
     if (!pin) {
         pin = [[MKPinAnnotationView alloc] initWithAnnotation:annotation reuseIdentifier:reuseId];
         pin.canShowCallout = YES;
         pin.animatesDrop = NO;
-        pin.pinTintColor = [UIColor redColor]; // 其他用户用红色
-        // 添加右侧详细信息按钮
+        pin.pinTintColor = [UIColor redColor];
         UIButton *detailBtn = [UIButton buttonWithType:UIButtonTypeDetailDisclosure];
         pin.rightCalloutAccessoryView = detailBtn;
     } else {
@@ -203,11 +267,8 @@ UIWindow *getKeyWindow() {
     }
 }
 
-// 当地图显示用户位置后，再次尝试调整区域
 - (void)mapView:(MKMapView *)mapView didUpdateUserLocation:(MKUserLocation *)userLocation {
-    if (!_hasCentered) {
-        [self updateDistancesAndRegion];
-    }
+    if (!_hasCentered) [self updateDistancesAndRegion];
 }
 
 - (void)closeMap {
@@ -301,7 +362,7 @@ void createFloatUI() {
 #pragma mark - 数据收集（线程安全）
 
 void addUser(BDUserInfo *u) {
-    if (!u) return;
+    if (!u || (u.latitude == 0 && u.longitude == 0)) return;
     if (!userQueue) createFloatUI();
     dispatch_sync(userQueue, ^{
         @try {
@@ -317,7 +378,7 @@ void addUser(BDUserInfo *u) {
     });
 }
 
-#pragma mark - Hook
+#pragma mark - Hook BDHomeViewController（原有）
 
 %hook BDHomeViewController
 
@@ -334,6 +395,37 @@ void addUser(BDUserInfo *u) {
     if (self.userInfo) {
         createFloatUI();
         addUser(self.userInfo);
+    }
+}
+
+%end
+
+#pragma mark - Hook BDPersonInfoTagView（新增，获取更完整的用户信息）
+
+// 假设 BDPersonInfoTagView 类存在，且其 userInfo 属性是 UserInformation 类型
+%hook BDPersonInfoTagView
+
+- (void)setUserInfo:(id)userInfo {
+    %orig;
+    if (userInfo) {
+        // 提取用户信息
+        BDUserInfo *info = extractUserInfoFromObject(userInfo);
+        if (info) {
+            createFloatUI();
+            addUser(info);
+        } else {
+            // 如果提取失败，尝试打印 userInfo 的属性以便调试
+            NSLog(@"[Radar] Failed to extract user info from %@", userInfo);
+            unsigned int count = 0;
+            objc_property_t *properties = class_copyPropertyList([userInfo class], &count);
+            for (unsigned int i = 0; i < count; i++) {
+                const char *name = property_getName(properties[i]);
+                NSString *propertyName = [NSString stringWithUTF8String:name];
+                id value = [userInfo valueForKey:propertyName];
+                NSLog(@"[Radar] UserInfo property: %@ = %@", propertyName, value);
+            }
+            free(properties);
+        }
     }
 }
 
