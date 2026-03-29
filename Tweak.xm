@@ -23,12 +23,10 @@ static NSMutableArray *users;
 
 UIWindow *getKeyWindow() {
     UIWindow *key = nil;
-
     if (@available(iOS 13.0, *)) {
         for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
             if (scene.activationState == UISceneActivationStateForegroundActive &&
                 [scene isKindOfClass:[UIWindowScene class]]) {
-
                 for (UIWindow *w in ((UIWindowScene *)scene).windows) {
                     if (w.isKeyWindow) {
                         return w;
@@ -42,7 +40,6 @@ UIWindow *getKeyWindow() {
         key = UIApplication.sharedApplication.keyWindow;
 #pragma clang diagnostic pop
     }
-
     return key;
 }
 
@@ -51,10 +48,7 @@ UIWindow *getKeyWindow() {
 void openMap(double lat, double lon) {
     NSString *urlStr = [NSString stringWithFormat:@"http://maps.apple.com/?ll=%f,%f", lat, lon];
     NSURL *url = [NSURL URLWithString:urlStr];
-
-    [[UIApplication sharedApplication] openURL:url
-                                       options:@{}
-                             completionHandler:nil];
+    [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
 }
 
 #pragma mark - 地图页面
@@ -66,17 +60,17 @@ void openMap(double lat, double lon) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-
     self.view.backgroundColor = UIColor.whiteColor;
-
     MKMapView *map = [[MKMapView alloc] initWithFrame:self.view.bounds];
     [self.view addSubview:map];
 
-    for (BDUserInfo *u in users) {
-        MKPointAnnotation *ann = [MKPointAnnotation new];
-        ann.coordinate = CLLocationCoordinate2DMake(u.latitude, u.longitude);
-        ann.title = u.name ?: @"User";
-        [map addAnnotation:ann];
+    @synchronized (users) {
+        for (BDUserInfo *u in users) {
+            MKPointAnnotation *ann = [MKPointAnnotation new];
+            ann.coordinate = CLLocationCoordinate2DMake(u.latitude, u.longitude);
+            ann.title = u.name ?: @"User";
+            [map addAnnotation:ann];
+        }
     }
 }
 
@@ -87,43 +81,33 @@ void openMap(double lat, double lon) {
 void showMap() {
     UIWindow *key = getKeyWindow();
     if (!key) return;
-
     UIViewController *root = key.rootViewController;
-
-    // 找最顶层控制器
     while (root.presentedViewController) {
         root = root.presentedViewController;
     }
-
     RadarVC *vc = [RadarVC new];
     [root presentViewController:vc animated:YES completion:nil];
 }
 
 void createFloatUI() {
-    if (floatWindow) return;
-
-    users = [NSMutableArray new];
-
-    floatWindow = [[UIWindow alloc] initWithFrame:CGRectMake(40, 200, 60, 60)];
-    floatWindow.windowLevel = UIWindowLevelAlert + 1;
-
-    UIViewController *vc = [UIViewController new];
-    floatWindow.rootViewController = vc;
-
-    UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
-    btn.frame = floatWindow.bounds;
-    btn.layer.cornerRadius = 30;
-    btn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.8];
-    [btn setTitle:@"雷达" forState:UIControlStateNormal];
-
-    [btn addTarget:vc action:@selector(openMapAction) forControlEvents:UIControlEventTouchUpInside];
-
-    [floatWindow addSubview:btn];
-    floatWindow.hidden = NO;
-
-    // 拖动
-    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:vc action:@selector(pan:)];
-    [btn addGestureRecognizer:pan];
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        users = [NSMutableArray new];
+        floatWindow = [[UIWindow alloc] initWithFrame:CGRectMake(40, 200, 60, 60)];
+        floatWindow.windowLevel = UIWindowLevelAlert + 1;
+        UIViewController *vc = [UIViewController new];
+        floatWindow.rootViewController = vc;
+        UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
+        btn.frame = floatWindow.bounds;
+        btn.layer.cornerRadius = 30;
+        btn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.8];
+        [btn setTitle:@"雷达" forState:UIControlStateNormal];
+        [btn addTarget:vc action:@selector(openMapAction) forControlEvents:UIControlEventTouchUpInside];
+        [floatWindow addSubview:btn];
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:vc action:@selector(pan:)];
+        [btn addGestureRecognizer:pan];
+        floatWindow.hidden = NO;
+    });
 }
 
 #pragma mark - 事件扩展
@@ -150,14 +134,14 @@ void createFloatUI() {
 
 void addUser(BDUserInfo *u) {
     if (!u) return;
-
-    for (BDUserInfo *x in users) {
-        if (x.latitude == u.latitude && x.longitude == u.longitude) {
-            return;
+    @synchronized (users) {
+        for (BDUserInfo *x in users) {
+            if (x.latitude == u.latitude && x.longitude == u.longitude) {
+                return;
+            }
         }
+        [users addObject:u];
     }
-
-    [users addObject:u];
 }
 
 #pragma mark - Hook
@@ -166,7 +150,6 @@ void addUser(BDUserInfo *u) {
 
 - (void)setUserInfo:(BDUserInfo *)userInfo {
     %orig;
-
     if (userInfo) {
         createFloatUI();
         addUser(userInfo);
@@ -175,7 +158,6 @@ void addUser(BDUserInfo *u) {
 
 - (void)viewDidLoad {
     %orig;
-
     if (self.userInfo) {
         createFloatUI();
         addUser(self.userInfo);
