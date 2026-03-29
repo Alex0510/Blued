@@ -30,27 +30,22 @@ static void enableTracelessAccess() {
             class_replaceMethod(userSettingClass, getterSel, newImp, method_getTypeEncoding(originalGetter));
         }
 
-        // 4. 如果 UserSetting 存在单例，在初始化时主动设置
+        // 4. 如果 UserSetting 存在单例，主动设置一次
         SEL sharedSel = NSSelectorFromString(@"shared");
         if ([userSettingClass respondsToSelector:sharedSel]) {
-            id sharedInstance = ((id (*)(id, SEL))objc_msgSend)(userSettingClass, sharedSel);
+            id sharedInstance = [userSettingClass performSelector:sharedSel];
             if (sharedInstance) {
-                ((void (*)(id, SEL, int))objc_msgSend)(sharedInstance, setterSel, 1);
+                [sharedInstance setValue:@1 forKey:@"is_traceless_access"];
             }
-        } else {
-            // 尝试通过归档等方式获取当前设置实例，这里简化为遍历所有实例（效率较低，仅示例）
-            // 通常单例模式更常见，若没有则忽略
         }
 
-        // 5. 可选：Hook 网络请求，确保提交到服务器的参数中也包含 is_traceless_access=1
-        // 这里假设设置通过 BDHTTPManager 的某个方法提交，例如 updateUserSetting:
+        // 5. Hook 网络请求，确保提交到服务器的参数中也包含 is_traceless_access=1
         Class httpManagerClass = NSClassFromString(@"BDHTTPManager");
         if (httpManagerClass) {
             SEL updateSel = NSSelectorFromString(@"updateUserSetting:");
             Method originalUpdate = class_getInstanceMethod(httpManagerClass, updateSel);
             if (originalUpdate) {
                 IMP newImp = imp_implementationWithBlock(^(id self, NSDictionary *params) {
-                    // 修改参数
                     NSMutableDictionary *newParams = [params mutableCopy];
                     newParams[@"is_traceless_access"] = @(1);
                     ((void (*)(id, SEL, id))method_getImplementation(originalUpdate))(self, updateSel, newParams);
