@@ -1,124 +1,75 @@
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
 #import <objc/runtime.h>
-#import <objc/message.h>
+#import <UIKit/UIKit.h>
 
+// 需要拦截的 cell 类名列表
+static NSArray<NSString *> *targetClassNames = @[
+    @"BDMineServiceCollectionCell",      // 我的服务
+    @"BDOtherServiceCollectionCell",     // 其他服务
+    @"BDLiveServiceCollectionCell",      // 直播服务
+    @"BDAudioServiceCollectionViewCell", // 聊天室服务
+    @"BDHealthServiceCollectionCell"     // 健康服务
+];
+
+// 通用的 swizzle 方法
+static void swizzleSelector(Class cls, SEL original, SEL swizzled) {
+    Method originalMethod = class_getInstanceMethod(cls, original);
+    Method swizzledMethod = class_getInstanceMethod(cls, swizzled);
+    if (originalMethod && swizzledMethod) {
+        method_exchangeImplementations(originalMethod, swizzledMethod);
+    }
+}
+
+// 动态库初始化
 __attribute__((constructor))
-static void disableSVGA() {
-    @autoreleasepool {
-        // Hook SVGAPlayer
-        Class svgaPlayer = NSClassFromString(@"SVGAPlayer");
-        if (svgaPlayer) {
-            // startAnimation
-            SEL startSel = @selector(startAnimation);
-            Method startMethod = class_getInstanceMethod(svgaPlayer, startSel);
-            if (startMethod) {
-                class_replaceMethod(svgaPlayer, startSel,
-                                    imp_implementationWithBlock(^(id self) {
-                                        // 调用 delegate 完成回调，模拟动画结束
-                                        id delegate = [self valueForKey:@"delegate"];
-                                        if (delegate && [delegate respondsToSelector:@selector(svgaPlayerDidFinishedAnimation:)]) {
-                                            #pragma clang diagnostic push
-                                            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-                                            [delegate performSelector:@selector(svgaPlayerDidFinishedAnimation:) withObject:self];
-                                            #pragma clang diagnostic pop
-                                        }
-                                        // 清理播放状态
-                                        [self performSelector:@selector(stopAnimation)];
-                                    }),
-                                    method_getTypeEncoding(startMethod));
-            }
+static void initialize_dylib() {
+    for (NSString *className in targetClassNames) {
+        Class cellClass = NSClassFromString(className);
+        if (!cellClass) continue;
 
-            // startAnimationWithRange:reverse:
-            SEL rangeSel = @selector(startAnimationWithRange:reverse:);
-            Method rangeMethod = class_getInstanceMethod(svgaPlayer, rangeSel);
-            if (rangeMethod) {
-                class_replaceMethod(svgaPlayer, rangeSel,
-                                    imp_implementationWithBlock(^(id self, NSRange range, BOOL reverse) {
-                                        id delegate = [self valueForKey:@"delegate"];
-                                        if (delegate && [delegate respondsToSelector:@selector(svgaPlayerDidFinishedAnimation:)]) {
-                                            #pragma clang diagnostic push
-                                            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-                                            [delegate performSelector:@selector(svgaPlayerDidFinishedAnimation:) withObject:self];
-                                            #pragma clang diagnostic pop
-                                        }
-                                        [self performSelector:@selector(stopAnimation)];
-                                    }),
-                                    method_getTypeEncoding(rangeMethod));
-            }
-        }
+        // 拦截 layoutSubviews，将 frame 高度强制设为 0
+        SEL originalLayout = @selector(layoutSubviews);
+        SEL swizzledLayout = @selector(zeroHeight_layoutSubviews);
+        swizzleSelector(cellClass, originalLayout, swizzledLayout);
 
-        // Hook BDSVGAAnimationView
-        Class svgaView = NSClassFromString(@"BDSVGAAnimationView");
-        if (svgaView) {
-            // startAnimation
-            SEL startSel = @selector(startAnimation);
-            Method startMethod = class_getInstanceMethod(svgaView, startSel);
-            if (startMethod) {
-                class_replaceMethod(svgaView, startSel,
-                                    imp_implementationWithBlock(^(id self) {
-                                        // 调用 completionBlock 模拟动画完成
-                                        id completion = [self valueForKey:@"completionBlock"];
-                                        if (completion) {
-                                            ((void (^)(void))completion)();
-                                        }
-                                        // 停止动画（清理状态）
-                                        [self performSelector:@selector(stopAnimation)];
-                                    }),
-                                    method_getTypeEncoding(startMethod));
-            }
+        // 可选：拦截 setHidden: 防止外部再次显示
+        SEL originalSetHidden = @selector(setHidden:);
+        SEL swizzledSetHidden = @selector(zeroHeight_setHidden:);
+        swizzleSelector(cellClass, originalSetHidden, swizzledSetHidden);
+    }
+}
 
-            // playWithResource:bundle:sizeBlock:completion:
-            SEL play1Sel = @selector(playWithResource:bundle:sizeBlock:completion:);
-            Method play1Method = class_getInstanceMethod(svgaView, play1Sel);
-            if (play1Method) {
-                class_replaceMethod(svgaView, play1Sel,
-                                    imp_implementationWithBlock(^(id self, id res, id bundle, id sizeBlock, id completion) {
-                                        if (completion) {
-                                            ((void (^)(void))completion)();
-                                        }
-                                    }),
-                                    method_getTypeEncoding(play1Method));
-            }
+// 类别，提供替换方法
+@interface NSObject (ZeroHeightCell)
+- (void)zeroHeight_layoutSubviews;
+- (void)zeroHeight_setHidden:(BOOL)hidden;
+@end
 
-            // playWithURLString:sizeBlock:completion:
-            SEL play2Sel = @selector(playWithURLString:sizeBlock:completion:);
-            Method play2Method = class_getInstanceMethod(svgaView, play2Sel);
-            if (play2Method) {
-                class_replaceMethod(svgaView, play2Sel,
-                                    imp_implementationWithBlock(^(id self, id url, id sizeBlock, id completion) {
-                                        if (completion) {
-                                            ((void (^)(void))completion)();
-                                        }
-                                    }),
-                                    method_getTypeEncoding(play2Method));
-            }
+@implementation NSObject (ZeroHeightCell)
 
-            // playWithResource:bundle:completion:
-            SEL play3Sel = @selector(playWithResource:bundle:completion:);
-            Method play3Method = class_getInstanceMethod(svgaView, play3Sel);
-            if (play3Method) {
-                class_replaceMethod(svgaView, play3Sel,
-                                    imp_implementationWithBlock(^(id self, id res, id bundle, id completion) {
-                                        if (completion) {
-                                            ((void (^)(void))completion)();
-                                        }
-                                    }),
-                                    method_getTypeEncoding(play3Method));
-            }
+- (void)zeroHeight_layoutSubviews {
+    // 先调用原方法（保证其他初始化执行）
+    [self zeroHeight_layoutSubviews];
 
-            // playWithURLString:completion:
-            SEL play4Sel = @selector(playWithURLString:completion:);
-            Method play4Method = class_getInstanceMethod(svgaView, play4Sel);
-            if (play4Method) {
-                class_replaceMethod(svgaView, play4Sel,
-                                    imp_implementationWithBlock(^(id self, id url, id completion) {
-                                        if (completion) {
-                                            ((void (^)(void))completion)();
-                                        }
-                                    }),
-                                    method_getTypeEncoding(play4Method));
-            }
+    // 如果当前对象确实是目标 cell 类型，强制将高度设为 0
+    if ([self isKindOfClass:NSClassFromString(@"BDMineServiceCollectionCell")] ||
+        [self isKindOfClass:NSClassFromString(@"BDOtherServiceCollectionCell")] ||
+        [self isKindOfClass:NSClassFromString(@"BDLiveServiceCollectionCell")] ||
+        [self isKindOfClass:NSClassFromString(@"BDAudioServiceCollectionViewCell")] ||
+        [self isKindOfClass:NSClassFromString(@"BDHealthServiceCollectionCell")]) {
+
+        CGRect frame = [self frame];
+        if (frame.size.height > 0) {
+            frame.size.height = 0;
+            [self setFrame:frame];
+            [self setHidden:YES];
         }
     }
 }
+
+- (void)zeroHeight_setHidden:(BOOL)hidden {
+    // 强制保持隐藏，避免后续被显示
+    [self zeroHeight_setHidden:YES];
+}
+
+@end
