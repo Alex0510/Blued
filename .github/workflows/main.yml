@@ -17,7 +17,6 @@ jobs:
       # 🧠 提取版本 + 名称 + 包ID
       # ========================
       - name: 解析项目信息
-        id: meta
         run: |
           VERSION=""
           NAME=""
@@ -74,12 +73,11 @@ jobs:
           sudo curl -L -o /usr/local/bin/ldid \
             https://github.com/ProcursusTeam/ldid/releases/download/v2.1.5-procursus7/ldid_linux_x86_64
           sudo chmod +x /usr/local/bin/ldid
-          ldid --version || true
 
       # ========================
       # 🔥 修复 linker（关键）
       # ========================
-      - name: 强制使用 lld（关键修复）
+      - name: 强制使用 lld
         run: |
           echo "LD=/usr/bin/ld.lld" >> $GITHUB_ENV
           echo "LDFLAGS=-fuse-ld=lld" >> $GITHUB_ENV
@@ -122,7 +120,7 @@ jobs:
           echo "ARCHS=arm64" >> $GITHUB_ENV
 
       # ========================
-      # 🔥 构建 rootful + rootless
+      # 🔥 构建
       # ========================
       - name: 构建 tweak
         run: |
@@ -154,7 +152,7 @@ jobs:
           fi
 
       # ========================
-      # ✨ 美化文件名
+      # ✨ 重命名 deb
       # ========================
       - name: 重命名 DEB
         run: |
@@ -168,11 +166,11 @@ jobs:
           done
 
       # ========================
-      # 📦 打包源码
+      # 📦 打包源码 + 同名
       # ========================
       - name: 打包源码
         run: |
-          git archive --format=zip --output=output/source.zip HEAD
+          git archive --format=zip --output=output/${NAME}-${VERSION}-source.zip HEAD
 
       # ========================
       # 🚀 Release
@@ -182,7 +180,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           name: ${{ env.NAME }}-${{ env.VERSION }}
-          files: output/*
+          files: output/${{ env.NAME }}-${{ env.VERSION }}*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -193,10 +191,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.NAME }}-${{ env.VERSION }}
-          path: output/*.deb
+          path: output/${{ env.NAME }}-${{ env.VERSION }}*.deb
 
-     - name: 上传源码
-  uses: actions/upload-artifact@v4
-  with:
-    name: ${{ env.NAME }}-${{ env.VERSION }}-source
-    path: output/source.zip
+      - name: 上传源码
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}-${{ env.VERSION }}-source
+          path: output/${{ env.NAME }}-${{ env.VERSION }}-source.zip
