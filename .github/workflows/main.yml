@@ -10,7 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: 检出代码
+        uses: actions/checkout@v4
 
       # ========================
       # 🧠 提取版本 + 名称 + 包ID
@@ -21,8 +22,6 @@ jobs:
           VERSION=""
           NAME=""
           PACKAGE=""
-
-          echo "==== 读取 control ===="
 
           if [ -f "layout/DEBIAN/control" ]; then
             CONTROL="layout/DEBIAN/control"
@@ -35,19 +34,10 @@ jobs:
             PACKAGE=$(grep "^Package:" $CONTROL | awk '{print $2}')
           fi
 
-          echo "control version: $VERSION"
-          echo "control package: $PACKAGE"
-
-          echo "==== 读取 Makefile ===="
-
           if [ -f "Makefile" ]; then
             NAME=$(grep "^TWEAK_NAME" Makefile | awk '{print $3}')
             [ -z "$VERSION" ] && VERSION=$(grep "^PACKAGE_VERSION" Makefile | awk '{print $3}')
           fi
-
-          echo "makefile name: $NAME"
-
-          echo "==== fallback tag ===="
 
           if [ -z "$VERSION" ]; then
             VERSION=$(echo $GITHUB_REF_NAME | sed 's/^v//')
@@ -57,35 +47,60 @@ jobs:
           [ -z "$NAME" ] && NAME="BluedHook"
           [ -z "$PACKAGE" ] && PACKAGE="com.unknown.$NAME"
 
-          echo "最终版本: $VERSION"
-          echo "最终名称: $NAME"
-          echo "最终包ID: $PACKAGE"
-
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "NAME=$NAME" >> $GITHUB_ENV
           echo "PACKAGE=$PACKAGE" >> $GITHUB_ENV
 
-      # ========================
-      # 🛠 依赖
-      # ========================
-      - run: |
-          sudo apt update
-          sudo apt install -y clang lld llvm make dpkg-dev fakeroot curl git
+          echo "版本: $VERSION"
+          echo "名称: $NAME"
+          echo "包ID: $PACKAGE"
 
-      - run: |
-          curl -L -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/download/v2.1.5-procursus7/ldid_linux_x86_64
-          chmod +x /usr/local/bin/ldid
+      # ========================
+      # 🛠 安装依赖
+      # ========================
+      - name: 安装依赖
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            clang lld llvm \
+            make dpkg-dev fakeroot \
+            curl git
+
+      # ========================
+      # 🔥 安装 ldid
+      # ========================
+      - name: 安装 ldid
+        run: |
+          sudo curl -L -o /usr/local/bin/ldid \
+            https://github.com/ProcursusTeam/ldid/releases/download/v2.1.5-procursus7/ldid_linux_x86_64
+          sudo chmod +x /usr/local/bin/ldid
+          ldid --version || true
+
+      # ========================
+      # 🔥 修复 linker（关键）
+      # ========================
+      - name: 强制使用 lld（关键修复）
+        run: |
+          echo "LD=/usr/bin/ld.lld" >> $GITHUB_ENV
+          echo "LDFLAGS=-fuse-ld=lld" >> $GITHUB_ENV
+
+      - name: 验证 lld
+        run: |
+          which ld.lld
+          ld.lld --version
 
       # ========================
       # 📦 Theos
       # ========================
-      - uses: actions/cache@v4
+      - name: 缓存 Theos
         id: cache-theos
+        uses: actions/cache@v4
         with:
           path: $HOME/theos
-          key: theos-cache
+          key: theos-${{ runner.os }}
 
-      - if: steps.cache-theos.outputs.cache-hit != 'true'
+      - name: 安装 Theos
+        if: steps.cache-theos.outputs.cache-hit != 'true'
         run: |
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           git clone https://github.com/theos/sdks.git $HOME/theos/sdks-repo
@@ -97,8 +112,14 @@ jobs:
           ln -sf /usr/bin/clang $HOME/theos/toolchain/linux/iphone/bin/clang
           ln -sf /usr/bin/clang++ $HOME/theos/toolchain/linux/iphone/bin/clang++
 
-      - run: |
+      # ========================
+      # 🌍 环境变量
+      # ========================
+      - name: 设置环境
+        run: |
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+          echo "TARGET=iphone:clang:latest" >> $GITHUB_ENV
+          echo "ARCHS=arm64" >> $GITHUB_ENV
 
       # ========================
       # 🔥 构建 rootful + rootless
@@ -110,15 +131,21 @@ jobs:
           # rootful
           make package \
             THEOS_PACKAGE_VERSION=$VERSION \
-            ARCHS=arm64
+            TARGET=iphone:clang:latest \
+            ARCHS=arm64 \
+            LD=/usr/bin/ld.lld \
+            LDFLAGS="-fuse-ld=lld"
 
           # rootless
           make package \
             THEOS_PACKAGE_VERSION=$VERSION \
+            TARGET=iphone:clang:latest \
             ARCHS=arm64 \
-            THEOS_PACKAGE_SCHEME=rootless
+            THEOS_PACKAGE_SCHEME=rootless \
+            LD=/usr/bin/ld.lld \
+            LDFLAGS="-fuse-ld=lld"
 
-          mkdir output
+          mkdir -p output
           find . -name "*.deb" -exec mv {} output/ \;
 
           if [ -z "$(ls output/*.deb 2>/dev/null)" ]; then
@@ -132,27 +159,26 @@ jobs:
       - name: 重命名 DEB
         run: |
           cd output
-          i=0
           for f in *.deb; do
             if [[ $f == *rootless* ]]; then
               mv "$f" "${NAME}-${VERSION}-rootless.deb"
             else
               mv "$f" "${NAME}-${VERSION}.deb"
             fi
-            i=$((i+1))
           done
-          echo "共处理 $i 个 deb"
 
       # ========================
       # 📦 打包源码
       # ========================
-      - run: |
+      - name: 打包源码
+        run: |
           git archive --format=zip --output=output/source.zip HEAD
 
       # ========================
       # 🚀 Release
       # ========================
-      - uses: softprops/action-gh-release@v2
+      - name: 发布 Release
+        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           name: ${{ env.NAME }}-${{ env.VERSION }}
@@ -161,9 +187,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ========================
-      # 📥 Artifact
+      # 📥 Artifacts
       # ========================
-      - uses: actions/upload-artifact@v4
+      - name: 上传 DEB
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.NAME }}-${{ env.VERSION }}
-          path: output/*
+          path: output/*.deb
+
+      - name: 上传源码
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-${{ env.VERSION }}
+          path: output/source.zip
