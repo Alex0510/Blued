@@ -199,4 +199,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.NAME }}-${{ env.VERSION }}
-          path: output/source.zip
+          path: output/*.zip
