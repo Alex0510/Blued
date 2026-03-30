@@ -101,8 +101,8 @@ static void ModifyUserInformation(id userInfo) {
 - (int)is_invisible_map { return 1; }
 - (int)is_hide_follows_count { return 1; }
 - (int)is_hide_followers_count { return 1; }
-- (int)is_hide_last_operate { return 1; }
-- (int)is_hide_distance { return 1; }
+- (int)is_hide_last_operate { return 0; }
+- (int)is_hide_distance { return 0; }
 - (int)is_hide_city_settled { return 1; }
 %end
 
