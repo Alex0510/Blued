@@ -198,5 +198,5 @@ jobs:
       - name: 上传源码
         uses: actions/upload-artifact@v4
         with:
-          name: source-${{ env.VERSION }}
+          name: ${{ env.NAME }}-${{ env.VERSION }}
           path: output/source.zip
