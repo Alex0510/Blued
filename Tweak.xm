@@ -3,39 +3,54 @@
 %hook BDMineServiceCollectionCell
 - (void)layoutSubviews {
     %orig;
-    self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, self.frame.size.width, 0);
-    self.hidden = YES;
+    UIView *view = (UIView *)self;
+    CGRect frame = view.frame;
+    frame.size.height = 0;
+    view.frame = frame;
+    view.hidden = YES;
 }
 %end
 
 %hook BDOtherServiceCollectionCell
 - (void)layoutSubviews {
     %orig;
-    self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, self.frame.size.width, 0);
-    self.hidden = YES;
+    UIView *view = (UIView *)self;
+    CGRect frame = view.frame;
+    frame.size.height = 0;
+    view.frame = frame;
+    view.hidden = YES;
 }
 %end
 
 %hook BDLiveServiceCollectionCell
 - (void)layoutSubviews {
     %orig;
-    self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, self.frame.size.width, 0);
-    self.hidden = YES;
+    UIView *view = (UIView *)self;
+    CGRect frame = view.frame;
+    frame.size.height = 0;
+    view.frame = frame;
+    view.hidden = YES;
 }
 %end
 
 %hook BDAudioServiceCollectionViewCell
 - (void)layoutSubviews {
     %orig;
-    self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, self.frame.size.width, 0);
-    self.hidden = YES;
+    UIView *view = (UIView *)self;
+    CGRect frame = view.frame;
+    frame.size.height = 0;
+    view.frame = frame;
+    view.hidden = YES;
 }
 %end
 
 %hook BDHealthServiceCollectionCell
 - (void)layoutSubviews {
     %orig;
-    self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, self.frame.size.width, 0);
-    self.hidden = YES;
+    UIView *view = (UIView *)self;
+    CGRect frame = view.frame;
+    frame.size.height = 0;
+    view.frame = frame;
+    view.hidden = YES;
 }
 %end
