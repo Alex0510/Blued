@@ -1,4 +1,4 @@
-name: Ultimate Theos Build & Release
+name: Build DEB with Theos
 
 on:
   push:
