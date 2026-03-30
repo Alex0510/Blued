@@ -17,7 +17,7 @@ TWEAK_NAME = Bluedmap
 
 Bluedmap_FILES = Tweak.xm
 Bluedmap_CFLAGS = -fobjc-arc
-Bluedmap_FRAMEWORKS = UIKit CoreLocation MapKit
+
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
