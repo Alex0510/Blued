@@ -1,4 +1,4 @@
-name: Build DEB with Theos
+name: Ultimate Theos Build & Release
 
 on:
   push:
@@ -10,169 +10,160 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 安装系统依赖
+      # ========================
+      # 🧠 提取版本 + 名称 + 包ID
+      # ========================
+      - name: 解析项目信息
+        id: meta
         run: |
+          VERSION=""
+          NAME=""
+          PACKAGE=""
+
+          echo "==== 读取 control ===="
+
+          if [ -f "layout/DEBIAN/control" ]; then
+            CONTROL="layout/DEBIAN/control"
+          elif [ -f "control" ]; then
+            CONTROL="control"
+          fi
+
+          if [ -n "$CONTROL" ]; then
+            VERSION=$(grep "^Version:" $CONTROL | awk '{print $2}')
+            PACKAGE=$(grep "^Package:" $CONTROL | awk '{print $2}')
+          fi
+
+          echo "control version: $VERSION"
+          echo "control package: $PACKAGE"
+
+          echo "==== 读取 Makefile ===="
+
+          if [ -f "Makefile" ]; then
+            NAME=$(grep "^TWEAK_NAME" Makefile | awk '{print $3}')
+            [ -z "$VERSION" ] && VERSION=$(grep "^PACKAGE_VERSION" Makefile | awk '{print $3}')
+          fi
+
+          echo "makefile name: $NAME"
+
+          echo "==== fallback tag ===="
+
+          if [ -z "$VERSION" ]; then
+            VERSION=$(echo $GITHUB_REF_NAME | sed 's/^v//')
+          fi
+
+          [ -z "$VERSION" ] && VERSION="0.0.1"
+          [ -z "$NAME" ] && NAME="BluedHook"
+          [ -z "$PACKAGE" ] && PACKAGE="com.unknown.$NAME"
+
+          echo "最终版本: $VERSION"
+          echo "最终名称: $NAME"
+          echo "最终包ID: $PACKAGE"
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "NAME=$NAME" >> $GITHUB_ENV
+          echo "PACKAGE=$PACKAGE" >> $GITHUB_ENV
+
+      # ========================
+      # 🛠 依赖
+      # ========================
+      - run: |
           sudo apt update
-          sudo apt install -y \
-            git build-essential clang fakeroot dpkg-dev \
-            libc6-dev curl perl xz-utils lld llvm
+          sudo apt install -y clang lld llvm make dpkg-dev fakeroot curl git
 
-      - name: 手动安装 ldid
-        run: |
-          sudo curl -L -o /usr/local/bin/ldid \
-            https://github.com/ProcursusTeam/ldid/releases/download/v2.1.5-procursus7/ldid_linux_x86_64
-          sudo chmod +x /usr/local/bin/ldid
-          ldid --version || echo "ldid 安装成功"
+      - run: |
+          curl -L -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/download/v2.1.5-procursus7/ldid_linux_x86_64
+          chmod +x /usr/local/bin/ldid
 
-      - name: 验证 ld.lld 可用
-        run: |
-          which ld.lld
-          ld.lld --version
-
-      - name: 缓存 Theos 和 SDK
+      # ========================
+      # 📦 Theos
+      # ========================
+      - uses: actions/cache@v4
         id: cache-theos
-        uses: actions/cache@v4
         with:
           path: $HOME/theos
-          key: ${{ runner.os }}-theos-${{ hashFiles('**/Makefile') }}
-          restore-keys: |
-            ${{ runner.os }}-theos-
+          key: theos-cache
 
-      - name: 安装 Theos 和 SDK（如果缓存未命中）
-        if: steps.cache-theos.outputs.cache-hit != 'true'
+      - if: steps.cache-theos.outputs.cache-hit != 'true'
         run: |
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           git clone https://github.com/theos/sdks.git $HOME/theos/sdks-repo
           mkdir -p $HOME/theos/sdks
-          cp -r $HOME/theos/sdks-repo/iPhoneOS14.5.sdk $HOME/theos/sdks/ || {
-            echo "错误：未找到 iPhoneOS14.5.sdk，请检查 sdks 仓库内容"
-            exit 1
-          }
+          cp -r $HOME/theos/sdks-repo/iPhoneOS14.5.sdk $HOME/theos/sdks/
           rm -rf $HOME/theos/sdks-repo
+
           mkdir -p $HOME/theos/toolchain/linux/iphone/bin
           ln -sf /usr/bin/clang $HOME/theos/toolchain/linux/iphone/bin/clang
           ln -sf /usr/bin/clang++ $HOME/theos/toolchain/linux/iphone/bin/clang++
-          echo "Theos 和 SDK 安装完成"
 
-      - name: 准备 lipo 工具
-        run: |
-          LIPO_PATH=$(which llvm-lipo 2>/dev/null || \
-                      which llvm-lipo-18 2>/dev/null || \
-                      which llvm-lipo-17 2>/dev/null || \
-                      which llvm-lipo-16 2>/dev/null || \
-                      which llvm-lipo-15 2>/dev/null)
-          if [ -z "$LIPO_PATH" ]; then
-            echo "错误：找不到 llvm-lipo。请确保已安装 llvm 包。"
-            exit 1
-          fi
-          echo "找到 lipo: $LIPO_PATH"
-          mkdir -p $HOME/theos/toolchain/linux/iphone/bin
-          ln -sf $LIPO_PATH $HOME/theos/toolchain/linux/iphone/bin/lipo
-          echo "lipo 链接已创建"
-
-      - name: 设置环境变量
-        run: |
+      - run: |
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
-          echo "TARGET=iphone:clang:latest" >> $GITHUB_ENV
-          echo "ARCHS=arm64" >> $GITHUB_ENV
-          echo "LD=/usr/bin/ld.lld" >> $GITHUB_ENV
-          echo "LDFLAGS=-fuse-ld=lld" >> $GITHUB_ENV
 
-      - name: 构建 .deb 包
+      # ========================
+      # 🔥 构建 rootful + rootless
+      # ========================
+      - name: 构建 tweak
         run: |
           make clean || true
-          make package TARGET=iphone:clang:latest LD=/usr/bin/ld.lld LDFLAGS="-fuse-ld=lld" ARCHS=arm64
-          mkdir -p output
+
+          # rootful
+          make package \
+            THEOS_PACKAGE_VERSION=$VERSION \
+            ARCHS=arm64
+
+          # rootless
+          make package \
+            THEOS_PACKAGE_VERSION=$VERSION \
+            ARCHS=arm64 \
+            THEOS_PACKAGE_SCHEME=rootless
+
+          mkdir output
           find . -name "*.deb" -exec mv {} output/ \;
 
-      # 调试步骤：确认 control 文件位置（可选，可删除）
-      - name: 查找 control 文件
-        run: |
-          find . -name "control" -type f
-
-      - name: 提取版本号
-        id: version
-        run: |
-          # 尝试多个常见位置
-          if [ -f "control" ]; then
-            CONTROL_FILE="control"
-          elif [ -f "layout/DEBIAN/control" ]; then
-            CONTROL_FILE="layout/DEBIAN/control"
-          else
-            CONTROL_FILE=""
+          if [ -z "$(ls output/*.deb 2>/dev/null)" ]; then
+            echo "❌ 没有生成 deb"
+            exit 1
           fi
 
-          if [ -n "$CONTROL_FILE" ]; then
-            VERSION=$(grep "^Version:" "$CONTROL_FILE" | awk '{print $2}' | head -1)
-          fi
-
-          if [ -z "$VERSION" ]; then
-            VERSION="0.0.1"
-            echo "警告：未找到 Version 字段，使用默认值 0.0.1"
-          fi
-
-          echo "提取到的版本号：$VERSION"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: 重命名 .deb 文件
+      # ========================
+      # ✨ 美化文件名
+      # ========================
+      - name: 重命名 DEB
         run: |
-          echo "当前版本号：${VERSION}"
           cd output
-          # 找到第一个 .deb 文件
-          DEB_FILE=$(find . -maxdepth 1 -name "*.deb" | head -1)
-          if [ -n "$DEB_FILE" ]; then
-            mv "$DEB_FILE" "BluedHook-${VERSION}.deb"
-            echo "已重命名为 BluedHook-${VERSION}.deb"
-          else
-            echo "错误：未找到 .deb 文件"
-            exit 1
-          fi
+          i=0
+          for f in *.deb; do
+            if [[ $f == *rootless* ]]; then
+              mv "$f" "${NAME}-${VERSION}-rootless.deb"
+            else
+              mv "$f" "${NAME}-${VERSION}.deb"
+            fi
+            i=$((i+1))
+          done
+          echo "共处理 $i 个 deb"
 
-      - name: 确保 output 目录包含 .deb 文件
-        run: |
-          if [ ! -f "output/BluedHook-${{ env.VERSION }}.deb" ]; then
-            echo "错误：文件 output/BluedHook-${{ env.VERSION }}.deb 不存在！"
-            exit 1
-          fi
-          echo "文件存在，准备上传"
+      # ========================
+      # 📦 打包源码
+      # ========================
+      - run: |
+          git archive --format=zip --output=output/source.zip HEAD
 
-      - name: 列出 output 目录内容（调试）
-        run: ls -la output/
-
-      - name: 打包源码
-        run: |
-          git archive --format=zip --output=output/BluedHook-source.zip HEAD
-
-      - name: 上传到 Release
-        uses: softprops/action-gh-release@v2
+      # ========================
+      # 🚀 Release
+      # ========================
+      - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: |
-            output/BluedHook-${{ env.VERSION }}.deb
-            output/BluedHook-source.zip
-          token: ${{ secrets.GITHUB_TOKEN }}
-          name: Release ${{ github.ref_name }}
-          # 如果有 CHANGELOG.md 可取消下一行注释
-          # body_path: CHANGELOG.md
+          name: ${{ env.NAME }}-${{ env.VERSION }}
+          files: output/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 上传 .deb 包到 Artifacts（始终上传）
-      - name: 上传 .deb 包到 Artifacts
-        uses: actions/upload-artifact@v4
+      # ========================
+      # 📥 Artifact
+      # ========================
+      - uses: actions/upload-artifact@v4
         with:
-          name: BluedHook-${{ env.VERSION }}.deb
-          path: output/BluedHook-${{ env.VERSION }}.deb
-          if-no-files-found: error
-
-      # 上传源码包到 Artifacts
-      - name: 上传源码包到 Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: BluedHook-source.zip
-          path: output/BluedHook-source.zip
-          if-no-files-found: error
+          name: ${{ env.NAME }}-${{ env.VERSION }}
+          path: output/*
