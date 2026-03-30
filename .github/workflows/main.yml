@@ -195,8 +195,8 @@ jobs:
           name: ${{ env.NAME }}-${{ env.VERSION }}
           path: output/*.deb
 
-      - name: 上传源码
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.NAME }}-${{ env.VERSION }}
-          path: output/*.zip
+     - name: 上传源码
+  uses: actions/upload-artifact@v4
+  with:
+    name: ${{ env.NAME }}-${{ env.VERSION }}-source
+    path: output/${{ env.NAME }}-${{ env.VERSION }}-source.zip
