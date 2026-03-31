@@ -1,16 +1,12 @@
 #import <UIKit/UIKit.h>
 
+// ========== 修改 UI 显示 ==========
 %hook UILabel
-
-// 拦截普通文本设置
 - (void)setText:(NSString *)text {
-    // 检查是否为“闪照(数字)”格式
     if ([text hasPrefix:@"闪照("] && [text hasSuffix:@")"]) {
-        // 查找当前 label 是否位于 PrivateChatViewController 的视图层级中
         UIResponder *responder = self;
         while (responder) {
             if ([responder isKindOfClass:NSClassFromString(@"PrivateChatViewController")]) {
-                // 修改文本为固定值 5
                 text = @"闪照(5)";
                 break;
             }
@@ -19,54 +15,65 @@
     }
     %orig(text);
 }
-
-// 拦截富文本设置（如果闪照文本通过 NSAttributedString 显示）
-- (void)setAttributedText:(NSAttributedString *)attributedText {
-    NSString *text = attributedText.string;
-    if ([text hasPrefix:@"闪照("] && [text hasSuffix:@")"]) {
-        UIResponder *responder = self;
-        while (responder) {
-            if ([responder isKindOfClass:NSClassFromString(@"PrivateChatViewController")]) {
-                // 替换数字部分为“5”
-                NSMutableAttributedString *newAttr = [attributedText mutableCopy];
-                NSRange numberRange = NSMakeRange(3, text.length - 4);
-                [newAttr replaceCharactersInRange:numberRange withString:@"5"];
-                attributedText = newAttr;
-                break;
-            }
-            responder = [responder nextResponder];
-        }
-    }
-    %orig(attributedText);
-}
-
 %end
 
+// ========== 修改本地数据源 ==========
 %hook BDBurnAfterReadManager
-
-// 剩余闪照次数
-- (long long)flash_left_times {
-    return 5;
-}
-
-// 免费次数
-- (long long)free_times {
-    return 5;
-}
-
-// 功能开关
-- (bool)is_enable {
-    return YES;
-}
-
+- (long long)flash_left_times { return 5; }
+- (long long)free_times { return 5; }
+- (bool)is_enable { return YES; }
+- (void)updateFlashTimes:(long long)times { %orig(5); }
 %end
 
-// 可选：绕过发送时的次数检查
-%hook NewKeyBoardPhotoView
+// ========== 修改发送请求参数（示例） ==========
+%hook BDFlashMessage  // 需要根据实际情况修改类名
+- (NSDictionary *)buildRequestParams {
+    NSMutableDictionary *params = [[%orig mutableCopy] autorelease];
+    params[@"free_times"] = @(5);
+    params[@"flash_left_times"] = @(5);
+    // 如果服务端要求客户端上报真实剩余次数，可能需要移除这些字段
+    // [params removeObjectForKey:@"free_times"];
+    return params;
+}
+%end
 
-// 判断是否可以发送销毁图片/视频（闪照）
+// ========== 修改网络响应（示例：hook 一个常见的网络回调） ==========
+%hook BDRequestManager
+- (void)sendRequest:(id)request completion:(void (^)(id response, NSError *error))completion {
+    void (^newCompletion)(id, NSError *) = ^(id response, NSError *error) {
+        if ([response isKindOfClass:[NSDictionary class]]) {
+            NSMutableDictionary *mutResponse = [response mutableCopy];
+            // 判断是否为闪照相关接口（根据 URL 或响应中的字段）
+            if ([mutResponse[@"data"] isKindOfClass:[NSArray class]]) {
+                BOOL isFlashRelated = NO;
+                for (id item in mutResponse[@"data"]) {
+                    if ([item isKindOfClass:[NSDictionary class]] && 
+                        (item[@"free_times"] != nil || item[@"flash_left_times"] != nil)) {
+                        isFlashRelated = YES;
+                        break;
+                    }
+                }
+                if (isFlashRelated) {
+                    NSMutableArray *newData = [mutResponse[@"data"] mutableCopy];
+                    for (NSMutableDictionary *item in newData) {
+                        if (item[@"free_times"]) item[@"free_times"] = @(5);
+                        if (item[@"flash_left_times"]) item[@"flash_left_times"] = @(5);
+                        if (item[@"flash_prompt"]) item[@"flash_prompt"] = @"(5)";
+                    }
+                    mutResponse[@"data"] = newData;
+                    response = mutResponse;
+                }
+            }
+        }
+        completion(response, error);
+    };
+    %orig(request, newCompletion);
+}
+%end
+
+// ========== 可选：绕过发送时的本地校验 ==========
+%hook NewKeyBoardPhotoView
 - (bool)canSendDestroyVidoeOrPic:(bool)arg1 {
     return YES;
 }
-
 %end
