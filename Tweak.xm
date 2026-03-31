@@ -1,79 +1,99 @@
 #import <UIKit/UIKit.h>
 
-// ========== 修改 UI 显示 ==========
-%hook UILabel
-- (void)setText:(NSString *)text {
-    if ([text hasPrefix:@"闪照("] && [text hasSuffix:@")"]) {
-        UIResponder *responder = self;
-        while (responder) {
-            if ([responder isKindOfClass:NSClassFromString(@"PrivateChatViewController")]) {
-                text = @"闪照(5)";
-                break;
-            }
-            responder = [responder nextResponder];
-        }
-    }
-    %orig(text);
+#pragma mark - BDSVGAAnimationView 拦截
+
+%hook BDSVGAAnimationView
+
+// 拦截本地资源播放
+- (void)playWithResource:(id)resource bundle:(id)bundle completion:(id)completion {
+    NSLog(@"[SVGA BLOCK] playWithResource blocked");
+    return;
 }
+
+// 拦截网络资源播放
+- (void)playWithURLString:(id)url completion:(id)completion {
+    NSLog(@"[SVGA BLOCK] playWithURLString blocked: %@", url);
+    return;
+}
+
+// 带 sizeBlock 的版本
+- (void)playWithResource:(id)resource bundle:(id)bundle sizeBlock:(id)sizeBlock completion:(id)completion {
+    NSLog(@"[SVGA BLOCK] playWithResource(sizeBlock) blocked");
+    return;
+}
+
+- (void)playWithURLString:(id)url sizeBlock:(id)sizeBlock completion:(id)completion {
+    NSLog(@"[SVGA BLOCK] playWithURLString(sizeBlock) blocked: %@", url);
+    return;
+}
+
+// 防止手动启动
+- (void)startAnimation {
+    NSLog(@"[SVGA BLOCK] startAnimation blocked");
+    return;
+}
+
+// 防止恢复播放
+- (void)layoutSubviews {
+    %orig;
+    [self stopAnimation];
+}
+
+// 确保停止
+- (void)didMoveToWindow {
+    %orig;
+    [self stopAnimation];
+}
+
 %end
 
-// ========== 修改本地数据源 ==========
-%hook BDBurnAfterReadManager
-- (long long)flash_left_times { return 5; }
-- (long long)free_times { return 5; }
-- (bool)is_enable { return YES; }
-- (void)updateFlashTimes:(long long)times { %orig(5); }
+
+#pragma mark - SVGAPlayer 底层兜底拦截
+
+%hook SVGAPlayer
+
+// 阻止开始播放
+- (void)startAnimation {
+    NSLog(@"[SVGA BLOCK] SVGAPlayer start blocked");
+    return;
+}
+
+// 阻止范围播放
+- (void)startAnimationWithRange:(struct { long long location; long long length; })range reverse:(BOOL)reverse {
+    NSLog(@"[SVGA BLOCK] startAnimationWithRange blocked");
+    return;
+}
+
+// 强制停止
+- (void)layoutSubviews {
+    %orig;
+    [self stopAnimation];
+}
+
+// 防止 step 播放
+- (void)stepToFrame:(long long)frame andPlay:(BOOL)play {
+    NSLog(@"[SVGA BLOCK] stepToFrame blocked");
+    return;
+}
+
+- (void)stepToPercentage:(double)percent andPlay:(BOOL)play {
+    NSLog(@"[SVGA BLOCK] stepToPercentage blocked");
+    return;
+}
+
 %end
 
-// ========== 修改发送请求参数（示例） ==========
-%hook BDFlashMessage  // 需要根据实际情况修改类名
-- (NSDictionary *)buildRequestParams {
-    NSMutableDictionary *params = [[%orig mutableCopy] autorelease];
-    params[@"free_times"] = @(5);
-    params[@"flash_left_times"] = @(5);
-    // 如果服务端要求客户端上报真实剩余次数，可能需要移除这些字段
-    // [params removeObjectForKey:@"free_times"];
-    return params;
-}
-%end
 
-// ========== 修改网络响应（示例：hook 一个常见的网络回调） ==========
-%hook BDRequestManager
-- (void)sendRequest:(id)request completion:(void (^)(id response, NSError *error))completion {
-    void (^newCompletion)(id, NSError *) = ^(id response, NSError *error) {
-        if ([response isKindOfClass:[NSDictionary class]]) {
-            NSMutableDictionary *mutResponse = [response mutableCopy];
-            // 判断是否为闪照相关接口（根据 URL 或响应中的字段）
-            if ([mutResponse[@"data"] isKindOfClass:[NSArray class]]) {
-                BOOL isFlashRelated = NO;
-                for (id item in mutResponse[@"data"]) {
-                    if ([item isKindOfClass:[NSDictionary class]] && 
-                        (item[@"free_times"] != nil || item[@"flash_left_times"] != nil)) {
-                        isFlashRelated = YES;
-                        break;
-                    }
-                }
-                if (isFlashRelated) {
-                    NSMutableArray *newData = [mutResponse[@"data"] mutableCopy];
-                    for (NSMutableDictionary *item in newData) {
-                        if (item[@"free_times"]) item[@"free_times"] = @(5);
-                        if (item[@"flash_left_times"]) item[@"flash_left_times"] = @(5);
-                        if (item[@"flash_prompt"]) item[@"flash_prompt"] = @"(5)";
-                    }
-                    mutResponse[@"data"] = newData;
-                    response = mutResponse;
-                }
-            }
-        }
-        completion(response, error);
-    };
-    %orig(request, newCompletion);
-}
-%end
+#pragma mark - 可选：直接隐藏动画 View（更狠）
 
-// ========== 可选：绕过发送时的本地校验 ==========
-%hook NewKeyBoardPhotoView
-- (bool)canSendDestroyVidoeOrPic:(bool)arg1 {
-    return YES;
+%hook BDSVGAAnimationView
+
+- (void)setHidden:(BOOL)hidden {
+    %orig(YES); // 强制隐藏
 }
+
+- (void)setAlpha:(CGFloat)alpha {
+    %orig(0.0); // 完全透明
+}
+
 %end
